@@ -1,7 +1,13 @@
+ultralytics==8.2.83
+opencv-python==4.10.0.84
+numpy==1.24.4
 google-cloud-storage==2.18.2
 google-cloud-bigquery==3.25.0
 google-cloud-pubsub==2.23.0
-numpy==1.24.4
 ndjson==0.3.1
 pandas==2.2.1
+lapx==0.5.10
+onnx==1.16.2
+supervision==0.23.0
 google-auth-httplib2==0.2.0
+onnxruntime == 1.19.2

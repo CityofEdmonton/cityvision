@@ -30,20 +30,23 @@ case $ACTION in
         # Build image using cloud build
         export TAG=`date +%Y%m%d-%H%M%S`
         
-        export SDK_CONTAINER_IMAGE="$REGION-docker.pkg.dev/$PROJECT/$REPOSITORY/base_image_dataflow_cityvision:$TAG"
+        export TEMPLATE_IMAGE="$REGION-docker.pkg.dev/$PROJECT/$REPOSITORY/dataflow_cityvision_template:$TAG"
 
-        gcloud builds submit .  --tag $SDK_CONTAINER_IMAGE --project $PROJECT
+        gcloud builds submit .  --tag $TEMPLATE_IMAGE --project $PROJECT
 
         export TEMPLATE_FILE=gs://$BUCKET/template_file/dataflow_cityvision-$TAG.json
-        export TEMPLATE_IMAGE=$REGION-docker.pkg.dev/$PROJECT/$REPOSITORY/dataflow_cityvision_template:$TAG
 
         echo " Building the flex templete..."
 
         gcloud dataflow flex-template build $TEMPLATE_FILE  \
-                                            --image $SDK_CONTAINER_IMAGE \
+                                            --image $TEMPLATE_IMAGE \
                                             --sdk-language "PYTHON" \
                                             --metadata-file=metadata.json \
-                                            --project $PROJECT
+                                            --project $PROJECT \
+                                            --region "us-west1" \
+                                            --disable-public-ips \
+                                            --service-account-email "dsr-dataflow-sa@apps-cityvision-prod.iam.gserviceaccount.com" \
+                                            --subnetwork  https://www.googleapis.com/compute/v1/projects/ops-shared-services-hub-prod/regions/us-west1/subnetworks/dsr-dataflow-subnet
         ;;
 
     pull)
@@ -52,8 +55,8 @@ case $ACTION in
         # docker pull $IMAGE_NAME
         echo "Please enter the image tag: "
         read TAG
-        export SDK_CONTAINER_IMAGE="$REGION-docker.pkg.dev/$PROJECT/$REPOSITORY/base_image_dataflow_cityvision:$TAG"
-        docker pull $SDK_CONTAINER_IMAGE
+        export TEMPLATE_IMAGE="$REGION-docker.pkg.dev/$PROJECT/$REPOSITORY/dataflow_cityvision_template:$TAG"
+        docker pull $TEMPLATE_IMAGE
         ;;
 
     test_local)
@@ -81,7 +84,7 @@ case $ACTION in
         read TAG
         export TEMPLATE_FILE=gs://$BUCKET/template_file/dataflow_cityvision-$TAG.json
         
-        export SDK_CONTAINER_IMAGE="$REGION-docker.pkg.dev/$PROJECT/$REPOSITORY/base_image_dataflow_cityvision:$TAG"
+        export TEMPLATE_IMAGE="$REGION-docker.pkg.dev/$PROJECT/$REPOSITORY/dataflow_cityvision_template:$TAG"
 
 
         gcloud dataflow flex-template run "flex-`date +%Y%m%d-%H%M%S`" \
@@ -93,7 +96,6 @@ case $ACTION in
             --parameters annotation_folder="dataflow_prod_test/annotation.json" \
             --parameters model_name="yolv8" \
             --parameters output_table="apps-cityvision-prod.cityvision.test_counting" \
-            --parameters sdk_container_image=$SDK_CONTAINER_IMAGE \
             --subnetwork  https://www.googleapis.com/compute/v1/projects/ops-shared-services-hub-prod/regions/us-west1/subnetworks/dsr-dataflow-subnet \
             --disable-public-ips \
             --service-account-email "dsr-dataflow-sa@apps-cityvision-prod.iam.gserviceaccount.com"
