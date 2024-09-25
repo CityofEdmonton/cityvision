@@ -43,7 +43,6 @@ case $ACTION in
                                             --sdk-language "PYTHON" \
                                             --metadata-file=metadata.json \
                                             --project $PROJECT \
-                                            --region "us-west1" \
                                             --disable-public-ips \
                                             --service-account-email "dsr-dataflow-sa@apps-cityvision-prod.iam.gserviceaccount.com" \
                                             --subnetwork  https://www.googleapis.com/compute/v1/projects/ops-shared-services-hub-prod/regions/us-west1/subnetworks/dsr-dataflow-subnet
@@ -69,7 +68,6 @@ case $ACTION in
 
         python main.py --video_folder dataflow_local_test \
                         --project $PROJECT \
-                        --region $REGION \
                         --model_name Yolv8 \
                         --annotation_folder dataflow_local_test/annotation.json \
                         --output_table apps-cityvision-prod.cityvision.test_counting \
