@@ -1,0 +1,16 @@
+{   
+  "name": "Test",
+  "description": "Test",
+  "parameters": [
+        {
+          "name": "Test",
+          "label": "Test",
+          "helpText": "Test"
+        },
+      {
+          "name": "Test",
+          "label": "Test",
+          "helpText": "Test"
+      }
+    ]
+  }
