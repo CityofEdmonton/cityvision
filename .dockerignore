@@ -1,0 +1,14 @@
+.devcontainer
+/report
+/test
+
+*.git
+*.gitignore
+*.gitmodules
+*.DS_Store
+*.env
+*.md
+*.yml
+*.yaml
+*.log
+*.gz
