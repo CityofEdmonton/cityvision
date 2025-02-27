@@ -1,0 +1,24 @@
+{
+    "name": "cityvision",
+    "context": "..",
+    "image": "cityvision_ai:latest",
+    "settings": {
+    "terminal.integrated.shell.linux": "/bin/bash"
+  },
+    "containerEnv": {"PYTHONPATH": "${env:PYTHONPATH}:/shinyapp", "PATH": "${env:PATH}:." },
+    "containerUser": "root",
+    "extensions": [
+        // "ikuyadeu.r"
+        // "mikhail-arkhipov.r"
+        // "reditorsupport.r-lsp",
+        // "ms-vscode-remote.remote-containers",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.debugpy",
+        "REditorSupport.r",
+        "GitHub.copilot",
+        "GitHub.copilot-chat",
+        "RDebugger.r-debugger",
+    ],
+    "forwardPorts": [5000]
+}
