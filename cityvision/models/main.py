@@ -15,8 +15,35 @@ import google.cloud.storage as storage
 
 
 class yolo_counting_model:
+	"""
+	Manages vehicle detection, tracking, and counting using YOLO models.
+
+	This class encapsulates the logic for processing video files, detecting objects
+	(typically vehicles) using a YOLO model, tracking these objects across frames,
+	and counting them as they cross predefined polygonal zones. It also handles
+	report generation and saving results, including annotated videos and data,
+	potentially to Google Cloud Storage.
+	"""
 
 	def __init__(self, name: str, config: dict) -> None:
+		"""
+		Initializes the yolo_counting_model.
+
+		Args:
+			name: The name or path of the YOLO model file (e.g., 'yolov8n.pt').
+			config: A dictionary containing configuration parameters:
+				study_name (str): Identifier for the current analysis study.
+				iou_threshold (float): Intersection over Union threshold for NMS.
+				confidence_threshold (float): Minimum detection confidence.
+				polygons (dict): Defines counting zones. Keys are zone names (e.g., "EB", "WB"),
+								 values are lists of [x, y] points defining the polygon.
+				classes (dict): Mapping of class IDs (int) to class names (str)
+								(e.g., {0: 'car', 1: 'truck'}).
+				tracker_config (str): Path to the tracker configuration file (e.g., 'bytetrack.yml').
+				report_path (str): Directory path to save output reports and videos.
+				direction (list): List of two strings representing the primary directions
+								  of movement corresponding to polygon keys.
+		"""
 		self.model_name = name
 		self.study_name = config["study_name"]
 		self.iou_threshold = config["iou_threshold"]
@@ -56,11 +83,29 @@ class yolo_counting_model:
 
 
 	def reset(self) -> None:
+		"""
+		Resets the internal state of the counter.
+
+		This includes clearing the history of crossed objects, track history,
+		and the frame count. Useful for processing multiple videos sequentially
+		with the same model instance.
+		"""
 		self.crossed_objects = {self.direction[0]: {}, self.direction[1]: {}}
 		self.track_history = defaultdict(lambda: [])
 		self.count = 0
 
 	def run(self, file_path: str, file_name: str) -> None:
+		"""
+		Processes a video file for object detection, tracking, and counting.
+
+		Reads a video frame by frame, applies YOLO detection and tracking,
+		counts objects crossing defined polygons, and saves an annotated video.
+
+		Args:
+			file_path: The full path to the video file.
+			file_name: The name of the video file (used for naming outputs
+					   and extracting metadata like start time).
+		"""
 
 		start_time = datetime.strptime(file_name.split("_")[1],"%Y%m%d%H%M")
 
@@ -108,7 +153,24 @@ class yolo_counting_model:
 		print(count_text_1)
 		print(count_text_2)
 
-	def get_count(self, frame, start_time, video_name) -> dict:
+	def get_count(self, frame: np.ndarray, start_time: datetime, video_name: str) -> np.ndarray:
+		"""
+		Processes a single frame to detect, track, and count objects.
+
+		Identifies objects crossing predefined polygons within the frame and
+		updates the count. Annotates the frame with bounding boxes, tracks,
+		and crossing information.
+
+		Args:
+			frame: The video frame (as a NumPy array) to process.
+			start_time: The starting datetime of the video recording, used for
+						timestamping events.
+			video_name: The name of the video (without extension), used for
+						saving auxiliary data like low-confidence detections.
+
+		Returns:
+			The annotated frame (as a NumPy array) with visualizations.
+		"""
 
 		results, boxes, class_ids, class_names, annotated_frame = self.get_result(frame, video_name)
 
@@ -149,7 +211,26 @@ class yolo_counting_model:
 
 		return annotated_frame
 
-	def get_result(self, frame, video_name) -> dict:
+	def get_result(self, frame: np.ndarray, video_name: str) -> tuple:
+		"""
+		Performs object detection and tracking on a single frame.
+
+		Uses the configured YOLO model to detect objects and applies tracking.
+		Optionally saves images of low-confidence detections.
+
+		Args:
+			frame: The video frame (as a NumPy array) to process.
+			video_name: The name of the video (without extension), used if
+						saving low-confidence detection images.
+
+		Returns:
+			A tuple containing:
+				- results: Raw results from the YOLO model's track method.
+				- boxes: Detected bounding boxes (xywh format).
+				- class_ids: List of class IDs for detected objects.
+				- class_names: List of class names for detected objects.
+				- annotated_frame: The frame annotated with detections by the model.
+		"""
 
 		results = self.model.track(frame, classes=self.classes_ids, persist=True, save=False, tracker=self.tracker_config, imgsz=(384,576),
 									verbose=False, conf = self.confidence_threshold, iou = self.iou_threshold, agnostic_nms = False)
@@ -173,6 +254,18 @@ class yolo_counting_model:
 		return (results, boxes, class_ids, class_names, annotated_frame)
 
 	def resample_data(self, df_first: pd.DataFrame, interval: str = '1min') -> pd.DataFrame:
+		"""
+		Resamples time-series data of detected objects to a specified interval.
+
+		Args:
+			df_first: Pandas DataFrame with a 'timestamp' column and object data.
+					  Typically contains one row per detected object crossing.
+			interval: Pandas resampling interval string (e.g., '1min', '15min', '1H').
+					  Defaults to '1min'.
+
+		Returns:
+			A new Pandas DataFrame with data aggregated by the specified interval.
+		"""
 
 		df = df_first.copy()
 		# Reset the index to make the track_id a column
@@ -192,7 +285,20 @@ class yolo_counting_model:
 
 		return resampled_df.copy()
 	
-	def generate_report(self, uuid) -> pd.DataFrame:
+	def generate_report(self, uuid: str) -> pd.DataFrame:
+		"""
+		Generates a consolidated report of object counts for all directions.
+
+		The report is a Pandas DataFrame with counts aggregated by time intervals
+		(using `resample_data`) for each direction.
+
+		Args:
+			uuid: A unique identifier for this analysis run or report.
+
+		Returns:
+			A Pandas DataFrame containing the traffic count report, with columns
+			for timestamp, class counts, direction, and the provided UUID.
+		"""
 
 		print(self.crossed_objects)
 
@@ -212,9 +318,22 @@ class yolo_counting_model:
 
 		return resampled_df
 	
-	def save_to_gcs(self,storage_client,bucket:str, uuid: str, video_name:str) -> None:
+	def save_to_gcs(self, storage_client: storage.Client, bucket_name: str, uuid: str, video_name: str) -> None:
+		"""
+		Saves generated reports and annotated videos to Google Cloud Storage.
+
+		Uploads the annotated video and potentially low-confidence detection images
+		to specified GCS buckets and paths.
+
+		Args:
+			storage_client: An initialized Google Cloud Storage client instance.
+			bucket_name: The name of the GCS bucket for general video outputs.
+						 (Note: A hardcoded bucket "processed-cityvision" is also used).
+			uuid: A unique identifier, used in structuring the GCS path for images.
+			video_name: The name of the video file (used for naming blobs in GCS).
+		"""
 		# save report folder to gcs
-		bucket_videos = bucket
+		bucket_videos = storage_client.bucket(bucket_name) # Corrected to use bucket_name
 		bucket_training_images = storage_client.bucket("processed-cityvision")
 		video_name = video_name.split("/")[-1]
 		# upload folder to bucket
@@ -232,15 +351,26 @@ class yolo_counting_model:
 			logging.debug("Low confidence detections folder does not exist for video: " + video_name)
 
 	# To-Do: Implement this function as another step in beam
-	def move_folder_gcs(self, source_bucket, source_folder_name, dest_bucket, dest_folder_name):
-		"""Moves a folder (simulated by copying and deleting) from one GCS bucket to another.
+	def move_folder_gcs(self, source_bucket: storage.Bucket, source_folder_name: str,
+						  dest_bucket: storage.Bucket, dest_folder_name: str) -> None:
+		"""
+		Moves files from a source GCS "folder" to a destination GCS "folder".
+
+		This method simulates moving a folder by listing blobs in the source path,
+		copying each to the destination, and then (implicitly, as deletion is not
+		implemented here) removing them from the source. It checks if a blob
+		already exists at the destination before copying.
+
+		Note: The original docstring mentioned "source_bucket_name" and "dest_bucket_name",
+		but the type hints suggest `storage.Bucket` objects. The implementation uses
+		bucket objects. The "Must end with a /." advice for folder names is good practice
+		for GCS prefixes.
 
 		Args:
-			source_bucket_name: The name of the source bucket.
-			source_folder_name: The name of the source folder (e.g., "my-folder/").  Must end with a /.
-			dest_bucket_name: The name of the destination bucket.
-			dest_folder_name: The name of the destination folder (e.g., "moved-folder/"). Must end with a /.
-
+			source_bucket: The source Google Cloud Storage bucket object.
+			source_folder_name: The "folder" path (prefix) in the source bucket.
+			dest_bucket: The destination Google Cloud Storage bucket object.
+			dest_folder_name: The "folder" path (prefix) in the destination bucket.
 		"""
 
 
@@ -262,38 +392,50 @@ class yolo_counting_model:
 
 	
 	def get_model_name(self) -> str:
+		"""Returns the name of the YOLO model file."""
 		return self.model_name
 
 	def get_iou_threshold(self) -> float:
+		"""Returns the Intersection over Union (IoU) threshold for NMS."""
 		return self.iou_threshold
 
 	def get_confidence_threshold(self) -> float:
+		"""Returns the confidence threshold for object detection."""
 		return self.confidence_threshold
 
-	def get_polygons(self) -> np.array:
+	def get_polygons(self) -> dict: # Type hint was np.array, but it's a dict of arrays
+		"""Returns the dictionary of polygons used for counting zones."""
 		return self.polygons
 
 	def get_classes(self) -> dict:
+		"""Returns the dictionary mapping class IDs to class names."""
 		return self.classes
 
 	def get_tracker_config(self) -> str:
+		"""Returns the path to the tracker configuration file."""
 		return self.tracker_config
 
 	def set_model_name(self, name: str) -> None:
+		"""Sets the name of the YOLO model file."""
 		self.model_name = name
 
 	def set_iou_threshold(self, iou_threshold: float) -> None:
+		"""Sets the Intersection over Union (IoU) threshold for NMS."""
 		self.iou_threshold = iou_threshold
 
 	def set_confidence_threshold(self, confidence_threshold: float) -> None:
+		"""Sets the confidence threshold for object detection."""
 		self.confidence_threshold = confidence_threshold
 
-	def set_polygons(self, polygons: np.array) -> None:
+	def set_polygons(self, polygons: dict) -> None: # Type hint was np.array
+		"""Sets the dictionary of polygons used for counting zones."""
 		self.polygons = polygons
 
 	def set_classes(self, classes: dict) -> None:
+		"""Sets the dictionary mapping class IDs to class names."""
 		self.classes = classes
 
 	def set_tracker_config(self, tracker_config: str) -> None:
+		"""Sets the path to the tracker configuration file."""
 		self.tracker_config = tracker_config
 
