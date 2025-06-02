@@ -1,16 +1,18 @@
-google-cloud-storage==2.18.2
-google-cloud-bigquery==3.25.0
-google-cloud-pubsub==2.23.0
-numpy==1.24.4
-ndjson==0.3.1
-pandas==2.2.1
 google-auth-httplib2==0.2.0
-ultralytics==8.0.196
-opencv-python==4.8.0.76
-supervision==0.18.0
+ipywidgets==8.1.5
+matplotlib==3.10.1
+ndjson==0.3.1
+numpy==1.24.4
+opencv-python==4.11.0.86
+pandas==2.2.1
+pillow==11.1.0
+requests==2.27.1
+supervision==0.25.1
+torch==2.0.1
+torchaudio==2.0.2
+torchvision==0.15.2
 tqdm==4.66.1
+transformers==4.49.0
+ultralytics==8.3.85
 # The Dockerfile installs torch, torchvision, torchaudio using --index-url https://download.pytorch.org/whl/cu118
 # The versions below are compatible with CUDA 11.8
-torch==2.0.1
-torchvision==0.15.2
-torchaudio==2.0.2

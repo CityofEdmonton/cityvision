@@ -1,0 +1,17 @@
+# use this docker compose file for your local testing. `docker compose build` and then `docker compose up`
+# if you need GITLAB_AUTH_TOKEN. e.g. export GITLAB_AUTH_TOKEN=xxxxxxx
+# After the code works from local, you can push to Gitlab and let CI pipeline to build images
+services:
+  cityvision:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - GITHUB_AUTH_TOKEN=${GITHUB_AUTH_TOKEN}
+    # todo: verify the image repo, if you are member of DSR team use gke instead
+    image: cityvision_ai:latest    
+    platform: linux/amd64
+    ports:
+      - 3838:3838
+    volumes:
+      - ./.configs:/shinyapp/app_vault_dir/.configs
