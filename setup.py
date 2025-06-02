@@ -41,12 +41,11 @@ setuptools.setup(
     name="cityvision",
     version="0.1.0",
     author="CityVision Developers",
-    author_email="contact@example.com", # Placeholder
+    author_email="sahand.somi@domain.com",
     description="AI-powered traffic counting and analysis library",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/user/cityvision", # Placeholder URL
-    packages=setuptools.find_packages(where="."), # Specify 'where' for clarity
+    packages=setuptools.find_packages(where="."), # Automatically find packages in the current directory
     install_requires=requirements,
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -60,7 +59,7 @@ setuptools.setup(
         "Intended Audience :: Developers",
         "Topic :: Scientific/Engineering :: Image Recognition",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
-        "Development Status :: 3 - Alpha", # Example status
+        "Development Status :: POC",
         "Natural Language :: English"
     ],
     python_requires=">=3.9",
