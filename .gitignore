@@ -169,3 +169,13 @@ application_default_credentials.json
 *.onnx
 *.pt
 .devcontainer/
+
+
+# add any jpg and .mp4 files
+*.jpg
+*.mp4
+
+# also virtual environments folder
+test_cityvision
+
+.DS_Store
