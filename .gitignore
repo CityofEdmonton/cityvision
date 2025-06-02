@@ -170,7 +170,6 @@ application_default_credentials.json
 *.pt
 .devcontainer/
 
-
 # add any jpg and .mp4 files
 *.jpg
 *.mp4
