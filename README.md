@@ -184,3 +184,30 @@ Contributions are welcome! If you find any issues or have suggestions for improv
 ## License
 
 This project is licensed under the **GNU Affero General Public License v3.0**. See the `LICENSE` file for full details.
+
+## Development
+
+This project uses pre-commit hooks to ensure code quality and consistency.
+To use them, first install the development dependencies:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+Then, install pre-commit and the hooks:
+
+```bash
+pre-commit install
+```
+
+Now, `black` and `flake8` will be run automatically before each commit.
+
+## CI/CD
+
+This project uses GitHub Actions for Continuous Integration.
+The workflow is defined in `.github/workflows/main.yml`.
+It automatically performs the following on every push and pull request:
+- Sets up Python 3.11.
+- Installs all necessary dependencies.
+- Runs linters (Flake8) and formatters (Black check).
+- Executes tests using `pytest`.

@@ -1,6 +1,7 @@
 import setuptools
 import os
 
+
 # --- Helper function to read a file ---
 def read_file(filename):
     """Read the content of a file."""
@@ -10,8 +11,9 @@ def read_file(filename):
     if not os.path.exists(file_path):
         print(f"Warning: File '{filename}' not found at '{file_path}'.")
         return ""
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
+
 
 # --- Helper function to read requirements ---
 def parse_requirements(filename):
@@ -20,20 +22,23 @@ def parse_requirements(filename):
     setup_dir = os.path.abspath(os.path.dirname(__file__))
     file_path = os.path.join(setup_dir, filename)
     if not os.path.exists(file_path):
-        print(f"Warning: Requirements file '{filename}' not found at '{file_path}'. No dependencies will be loaded.")
+        print(
+            f"Warning: Requirements file '{filename}' not found at '{file_path}'. No dependencies will be loaded."
+        )
         return []
-    
-    content = read_file(filename) # Use the read_file helper
+
+    content = read_file(filename)  # Use the read_file helper
     lines = (line.strip() for line in content.splitlines())
     return [line for line in lines if line and not line.startswith("#")]
 
+
 # --- Read README.md for long description ---
-long_description = read_file('README.md')
+long_description = read_file("README.md")
 if not long_description:
     long_description = "CityVision: AI-powered traffic counting and analysis. See repository for details."
 
 # --- Get the requirements from requirements.txt ---
-requirements = parse_requirements('requirements.txt')
+requirements = parse_requirements("requirements.txt")
 if not requirements:
     print("Warning: No requirements loaded. Check 'requirements.txt'.")
 
@@ -45,7 +50,9 @@ setuptools.setup(
     description="AI-powered traffic counting and analysis library",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    packages=setuptools.find_packages(where="."), # Automatically find packages in the current directory
+    packages=setuptools.find_packages(
+        where="."
+    ),  # Automatically find packages in the current directory
     install_requires=requirements,
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -60,7 +67,7 @@ setuptools.setup(
         "Topic :: Scientific/Engineering :: Image Recognition",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Development Status :: POC",
-        "Natural Language :: English"
+        "Natural Language :: English",
     ],
     python_requires=">=3.9",
 )
