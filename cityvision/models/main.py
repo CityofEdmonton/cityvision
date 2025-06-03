@@ -48,7 +48,9 @@ class yolo_counting_model:
         self.study_name = config["study_name"]
         self.iou_threshold = config["iou_threshold"]
         self.confidence_threshold = config["confidence_threshold"]
-        self.direction_vector = config["direction_vector"] # Dict of vector directions e.g. {"EB": [[x1, y1], [x2, y2]], "WB": [[x1, y1], [x2, y2]]}
+        self.direction_vector = config[
+            "direction_vector"
+        ]  # Dict of vector directions e.g. {"EB": [[x1, y1], [x2, y2]], "WB": [[x1, y1], [x2, y2]]}
         self.classes = config["classes"]
         self.tracker_config = config["tracker_config"]
         self.report_path = config["report_path"]
@@ -56,7 +58,9 @@ class yolo_counting_model:
 
         # create dictionary to store crossed objects according to key values
         self.crossed_objects = {self.direction[0]: {}, self.direction[1]: {}}
-        self.track_history = defaultdict(lambda: {"track": [], "speed": []}) # format {track_id: {"track": [], "speed": []}}
+        self.track_history = defaultdict(
+            lambda: {"track": [], "speed": []}
+        )  # format {track_id: {"track": [], "speed": []}}
         self.count = 0
         self.model = YOLO(self.model_name)
 
@@ -139,18 +143,18 @@ class yolo_counting_model:
 
                     # Draw the arrow line on the frame
                     cv2.arrowedLine(
-                        annotated_frame, 
-                        tuple(self.dir_1[0]), 
-                        tuple(self.dir_1[1]), 
-                        (0, 0, 0), 
-                        2
+                        annotated_frame,
+                        tuple(self.dir_1[0]),
+                        tuple(self.dir_1[1]),
+                        (0, 0, 0),
+                        2,
                     )
                     cv2.arrowedLine(
-                        annotated_frame, 
-                        tuple(self.dir_2[0]), 
-                        tuple(self.dir_2[1]), 
-                        (0, 0, 0), 
-                        2
+                        annotated_frame,
+                        tuple(self.dir_2[0]),
+                        tuple(self.dir_2[1]),
+                        (0, 0, 0),
+                        2,
                     )
 
                     # Write the count of objects on each frame
@@ -224,7 +228,6 @@ class yolo_counting_model:
                 speed = self.track_history[track_id].get("speed", [])
                 track.append((float(x), float(y)))  # x, y center point
 
-
                 # annotate the bounding box
                 cv2.rectangle(
                     annotated_frame,
@@ -236,17 +239,19 @@ class yolo_counting_model:
                 if len(track) > 60:  # retain 30 tracks for 30 frames
                     track.pop(0)
 
-                if len(track) > 15:  # calculate speed and direction if more than 15 points
+                if (
+                    len(track) > 15
+                ):  # calculate speed and direction if more than 15 points
                     # TO-DO: Calculate speed and direction
 
                     # get direction vector and compare with the polygon direction
 
-                    direction_vector_1 = np.array(
-                        self.dir_1[1]
-                    ) - np.array(self.dir_1[0]) 
-                    direction_vector_2 = np.array(
-                        self.dir_2[1]
-                    ) - np.array(self.dir_2[0])
+                    direction_vector_1 = np.array(self.dir_1[1]) - np.array(
+                        self.dir_1[0]
+                    )
+                    direction_vector_2 = np.array(self.dir_2[1]) - np.array(
+                        self.dir_2[0]
+                    )
 
                     vehicle_vector = np.array(track[-1]) - np.array(track[0])
                     vehicle_vector = vehicle_vector / np.linalg.norm(vehicle_vector)
@@ -254,23 +259,33 @@ class yolo_counting_model:
                     # Check if the vehicle is moving in the direction of the polygon
                     direction_angle_1 = np.arccos(
                         np.clip(
-                            np.dot(vehicle_vector, direction_vector_1 / np.linalg.norm(direction_vector_1)),
+                            np.dot(
+                                vehicle_vector,
+                                direction_vector_1 / np.linalg.norm(direction_vector_1),
+                            ),
                             -1.0,
                             1.0,
                         )
                     )
                     direction_angle_2 = np.arccos(
                         np.clip(
-                            np.dot(vehicle_vector, direction_vector_2 / np.linalg.norm(direction_vector_2)),
+                            np.dot(
+                                vehicle_vector,
+                                direction_vector_2 / np.linalg.norm(direction_vector_2),
+                            ),
                             -1.0,
                             1.0,
                         )
                     )
 
-                    logging.info(f"Direction angle 1 for {track_id}: {direction_angle_1}")
-                    logging.info(f"Direction angle 2 for {track_id}: {direction_angle_2}")
+                    logging.info(
+                        f"Direction angle 1 for {track_id}: {direction_angle_1}"
+                    )
+                    logging.info(
+                        f"Direction angle 2 for {track_id}: {direction_angle_2}"
+                    )
 
-                    if direction_angle_1 < np.pi/2 :  # 90 degrees
+                    if direction_angle_1 < np.pi / 2:  # 90 degrees
                         # Object is moving in the direction of dir_1
                         if track_id not in self.crossed_objects[self.direction[0]]:
                             time_seen = datetime.fromtimestamp(

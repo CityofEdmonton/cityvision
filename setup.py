@@ -54,7 +54,6 @@ setuptools.setup(
     ),  # Automatically find packages in the current directory
     install_requires=requirements,
     classifiers=[
-
         "Programming Language :: Python :: 3.11",
         # Using the SPDX identifier for AGPLv3 as it's standard and precise.
         # The LICENSE file indicates "Version 3", not "or later".
