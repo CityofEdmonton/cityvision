@@ -44,7 +44,6 @@ if not requirements:
 
 setuptools.setup(
     name="cityvision",
-    version="0.1.0",
     author="CityVision Developers",
     author_email="sahand.somi@domain.com",
     description="AI-powered traffic counting and analysis library",
@@ -55,9 +54,7 @@ setuptools.setup(
     ),  # Automatically find packages in the current directory
     install_requires=requirements,
     classifiers=[
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
+
         "Programming Language :: Python :: 3.11",
         # Using the SPDX identifier for AGPLv3 as it's standard and precise.
         # The LICENSE file indicates "Version 3", not "or later".
@@ -69,5 +66,5 @@ setuptools.setup(
         "Development Status :: POC",
         "Natural Language :: English",
     ],
-    python_requires=">=3.9",
+    python_requires=">=3.11",
 )

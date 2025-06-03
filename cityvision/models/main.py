@@ -44,39 +44,35 @@ class yolo_counting_model:
                                                           of movement corresponding to polygon keys.
         """
         self.model_name = name
+        self.camera_intrinsic = config["camera_intrinsic"]
         self.study_name = config["study_name"]
         self.iou_threshold = config["iou_threshold"]
         self.confidence_threshold = config["confidence_threshold"]
-        self.polygons = config["polygons"]
+        self.direction_vector = config["direction_vector"] # Dict of vector directions e.g. {"EB": [[x1, y1], [x2, y2]], "WB": [[x1, y1], [x2, y2]]}
         self.classes = config["classes"]
         self.tracker_config = config["tracker_config"]
         self.report_path = config["report_path"]
         self.direction = config["direction"]
+
         # create dictionary to store crossed objects according to key values
         self.crossed_objects = {self.direction[0]: {}, self.direction[1]: {}}
-        self.track_history = defaultdict(lambda: [])
+        self.track_history = defaultdict(lambda: {"track": [], "speed": []}) # format {track_id: {"track": [], "speed": []}}
         self.count = 0
         self.model = YOLO(self.model_name)
-        # self.model.export(format="onnx", half = False, imgsz=(384,576))
-        # self.model = YOLO(self.model_name.split(".")[0]+".onnx")
+
         try:
             self.model.to("cuda")
         except:
             self.model.export(format="onnx", half=False, imgsz=(384, 576))
             self.model = YOLO(self.model_name.split(".")[0] + ".onnx")
 
-        if "WB" in self.polygons.keys():
-            self.polygons_1 = self.polygons["EB"]
-            self.polygons_2 = self.polygons["WB"]
-
-        elif "wb" in self.polygons.keys():
-
-            self.polygons_1 = self.polygons["eb"]
-            self.polygons_2 = self.polygons["wb"]
+        if "WB" in self.direction_vector.keys():
+            self.dir_1 = self.direction_vector["EB"]
+            self.dir_2 = self.direction_vector["WB"]
 
         else:
-            self.polygons_1 = self.polygons["NB"]
-            self.polygons_2 = self.polygons["SB"]
+            self.dir_1 = self.direction_vector["NB"]
+            self.dir_2 = self.direction_vector["SB"]
 
         self.classes_ids = [k for k, _ in self.classes.items()]
 
@@ -89,7 +85,7 @@ class yolo_counting_model:
         with the same model instance.
         """
         self.crossed_objects = {self.direction[0]: {}, self.direction[1]: {}}
-        self.track_history = defaultdict(lambda: [])
+        self.track_history = defaultdict(lambda: {"track": [], "speed": []})
         self.count = 0
 
     def run(self, file_path: str, file_name: str) -> None:
@@ -120,6 +116,7 @@ class yolo_counting_model:
 
         logging.info("frame_width: " + str(w))
         logging.info("frame_height: " + str(h))
+        logging.info("fps: " + str(fps))
 
         frame_generator = sv.get_video_frames_generator(source_path=file_path)
 
@@ -140,24 +137,33 @@ class yolo_counting_model:
                         frame, start_time, file_name.split(".")[0]
                     )
 
-                    # Draw the line on the frame
-                    cv2.polylines(
-                        annotated_frame, [self.polygons_1], True, (0, 255, 0), 2
+                    # Draw the arrow line on the frame
+                    cv2.arrowedLine(
+                        annotated_frame, 
+                        tuple(self.dir_1[0]), 
+                        tuple(self.dir_1[1]), 
+                        (0, 0, 0), 
+                        2
                     )
-                    cv2.polylines(
-                        annotated_frame, [self.polygons_2], True, (0, 255, 0), 2
+                    cv2.arrowedLine(
+                        annotated_frame, 
+                        tuple(self.dir_2[0]), 
+                        tuple(self.dir_2[1]), 
+                        (0, 0, 0), 
+                        2
                     )
 
                     # Write the count of objects on each frame
                     count_text_1 = f"Objects crossed {self.direction[0]}: {len(self.crossed_objects[self.direction[0]])}"
                     count_text_2 = f"Objects crossed {self.direction[1]}: {len(self.crossed_objects[self.direction[1]])}"
+
                     cv2.putText(
                         annotated_frame,
                         count_text_1,
                         (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         1,
-                        (0, 255, 0),
+                        (255, 0, 0),
                         2,
                     )
                     cv2.putText(
@@ -166,7 +172,7 @@ class yolo_counting_model:
                         (10, 90),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         1,
-                        (0, 255, 0),
+                        (255, 0, 0),
                         2,
                     )
 
@@ -214,55 +220,88 @@ class yolo_counting_model:
                 x, y, w, h = box
                 pt = (int(x.numpy()), int(y.numpy()))
                 cls = cls
-                track = self.track_history[track_id]
+                track = self.track_history[track_id].get("track", [])
+                speed = self.track_history[track_id].get("speed", [])
                 track.append((float(x), float(y)))  # x, y center point
-                if len(track) > 30:  # retain 30 tracks for 30 frames
+
+
+                # annotate the bounding box
+                cv2.rectangle(
+                    annotated_frame,
+                    (int(x - w / 2), int(y - h / 2)),
+                    (int(x + w / 2), int(y + h / 2)),
+                    (255, 0, 0),
+                    2,
+                )
+                if len(track) > 60:  # retain 30 tracks for 30 frames
                     track.pop(0)
-                flag_1 = cv2.pointPolygonTest(self.polygons_1, pt, False)
-                flag_2 = cv2.pointPolygonTest(self.polygons_2, pt, False)
-                # Check if the object crosses the line
-                if (
-                    flag_1 > 0 and flag_1 is not None
-                ):  # Assuming objects cross horizontally
-                    if track_id not in self.crossed_objects[self.direction[0]]:
-                        time_seen = datetime.fromtimestamp(
-                            int(self.count / 30) + start_time.timestamp()
-                        )
-                        self.crossed_objects[self.direction[0]][track_id] = [
-                            time_seen.strftime("%Y-%m-%d %H:%M:%S"),
-                            cls,
-                        ]
 
-                    # Annotate the object as it crosses the line
-                    cv2.rectangle(
-                        annotated_frame,
-                        (int(x - w / 2), int(y - h / 2)),
-                        (int(x + w / 2), int(y + h / 2)),
-                        (0, 255, 0),
-                        2,
+                if len(track) > 15:  # calculate speed and direction if more than 15 points
+                    # TO-DO: Calculate speed and direction
+
+                    # get direction vector and compare with the polygon direction
+
+                    direction_vector_1 = np.array(
+                        self.dir_1[1]
+                    ) - np.array(self.dir_1[0]) 
+                    direction_vector_2 = np.array(
+                        self.dir_2[1]
+                    ) - np.array(self.dir_2[0])
+
+                    vehicle_vector = np.array(track[-1]) - np.array(track[0])
+                    vehicle_vector = vehicle_vector / np.linalg.norm(vehicle_vector)
+
+                    # Check if the vehicle is moving in the direction of the polygon
+                    direction_angle_1 = np.arccos(
+                        np.clip(
+                            np.dot(vehicle_vector, direction_vector_1 / np.linalg.norm(direction_vector_1)),
+                            -1.0,
+                            1.0,
+                        )
+                    )
+                    direction_angle_2 = np.arccos(
+                        np.clip(
+                            np.dot(vehicle_vector, direction_vector_2 / np.linalg.norm(direction_vector_2)),
+                            -1.0,
+                            1.0,
+                        )
                     )
 
-                # Check if the object crosses the line
-                if (
-                    flag_2 > 0 and flag_2 is not None
-                ):  # Assuming objects cross horizontally
-                    if track_id not in self.crossed_objects[self.direction[1]]:
-                        time_seen = datetime.fromtimestamp(
-                            int(self.count / 30) + start_time.timestamp()
-                        )
-                        self.crossed_objects[self.direction[1]][track_id] = [
-                            time_seen.strftime("%Y-%m-%d %H:%M:%S"),
-                            cls,
-                        ]
+                    logging.info(f"Direction angle 1 for {track_id}: {direction_angle_1}")
+                    logging.info(f"Direction angle 2 for {track_id}: {direction_angle_2}")
 
-                    # Annotate the object as it crosses the line
-                    cv2.rectangle(
-                        annotated_frame,
-                        (int(x - w / 2), int(y - h / 2)),
-                        (int(x + w / 2), int(y + h / 2)),
-                        (0, 255, 0),
-                        2,
-                    )
+                    if direction_angle_1 < np.pi/2 :  # 90 degrees
+                        # Object is moving in the direction of dir_1
+                        if track_id not in self.crossed_objects[self.direction[0]]:
+                            time_seen = datetime.fromtimestamp(
+                                int(self.count / 30) + start_time.timestamp()
+                            )
+                            self.crossed_objects[self.direction[0]][track_id] = [
+                                time_seen.strftime("%Y-%m-%d %H:%M:%S"),
+                                cls,
+                            ]
+
+                    else:
+                        # Object is moving in the direction of dir_2
+                        if track_id not in self.crossed_objects[self.direction[1]]:
+                            time_seen = datetime.fromtimestamp(
+                                int(self.count / 30) + start_time.timestamp()
+                            )
+                            self.crossed_objects[self.direction[1]][track_id] = [
+                                time_seen.strftime("%Y-%m-%d %H:%M:%S"),
+                                cls,
+                            ]
+
+                # write the track ID and class name and direction on the frame
+                cv2.putText(
+                    annotated_frame,
+                    f"ID: {track_id} {cls} Dir: {self.direction[0] if track_id in self.crossed_objects[self.direction[0]] else (self.direction[1] if track_id in self.crossed_objects[self.direction[1]] else 'Unknown')}",
+                    (int(x - w / 2), int(y - h / 2) + 20),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (255, 0, 0),
+                    1,
+                )
 
                 # Annotate center of the object
                 cv2.circle(annotated_frame, pt, 5, (0, 255, 0), -1)
