@@ -4,13 +4,95 @@ from collections import defaultdict
 from datetime import datetime
 from ultralytics import YOLO
 import cv2
+from PIL import Image
+import yaml
+import os
 import time
 import supervision as sv
 import pandas as pd
 from tqdm import tqdm
 import logging
 import os
+import torch
 import google.cloud.storage as storage
+from transformers import AutoImageProcessor, AutoModelForDepthEstimation
+
+
+def get_depth_map(frame: np.ndarray, camera_intrinsic: os.path) -> np.ndarray:
+    """
+    Computes a depth map from a video frame using the camera intrinsic parameters.
+
+    Args:
+        frame: The video frame (as a NumPy array) to process.
+        camera_intrinsic: Camera intrinsic parameters file path
+
+    Returns:
+        A depth map (as a NumPy array) representing the depth of each pixel in the frame.
+    """
+
+    # read camera intrinsic parameters from yml file
+    with open(camera_intrinsic, "r") as file:
+        camera_intrinsic = yaml.safe_load(file)
+
+    if "dis_vec" not in camera_intrinsic:
+        raise ValueError("Camera intrinsic parameters must include 'dis_vec'.")
+    if not isinstance(frame, np.ndarray):
+        raise TypeError("Frame must be a NumPy array.")
+    if frame.ndim != 3 or frame.shape[2] not in [3, 4]:
+        raise ValueError("Frame must be a 3-channel (RGB) or 4-channel (RGBA) image.")
+    if not isinstance(camera_intrinsic, dict):
+        raise TypeError("Camera intrinsic parameters must be a dictionary.")
+    if not all(key in camera_intrinsic for key in ["fx", "fy", "cx", "cy", "dis_vec"]):
+        raise ValueError(
+            "Camera intrinsic parameters must include 'fx', 'fy', 'cx', 'cy', and 'dis_vec'."
+        )
+
+    h, w = frame.shape[:2]
+    print("camera distortion vector", camera_intrinsic["dis_vec"])
+
+    # Create camera matrix
+    camera_matrix = np.array(
+        [
+            [camera_intrinsic["fx"], 0, camera_intrinsic["cx"]],
+            [0, camera_intrinsic["fy"], camera_intrinsic["cy"]],
+            [0, 0, 1],
+        ]
+    )
+
+    newcameramtx, roi = cv2.getOptimalNewCameraMatrix(
+        camera_matrix, np.array(camera_intrinsic["dis_vec"]), (w, h), 1, (w, h)
+    )
+
+    # undistort
+    undistorted_img = cv2.undistort(
+        frame, camera_matrix, np.array(camera_intrinsic["dis_vec"]), None, newcameramtx
+    )
+
+    # crop the image
+    x, y, w, h = roi
+    undistorted_img = undistorted_img[y : y + h, x : x + w]
+
+    undistorted_image = Image.fromarray(undistorted_img)
+
+    CHECKPOINT = "depth-anything/Depth-Anything-V2-Metric-Outdoor-Large-hf"
+
+    image_processor = AutoImageProcessor.from_pretrained(CHECKPOINT)
+    model = AutoModelForDepthEstimation.from_pretrained(CHECKPOINT)
+
+    inputs = image_processor(images=undistorted_image, return_tensors="pt")
+
+    with torch.no_grad():
+        outputs = model(**inputs)
+        predicted_depth = outputs.predicted_depth
+
+    prediction = torch.nn.functional.interpolate(
+        predicted_depth.unsqueeze(1),
+        size=undistorted_image.size[::-1],
+        mode="bicubic",
+        align_corners=False,
+    )
+
+    return prediction.cpu().numpy()
 
 
 class yolo_counting_model:
@@ -44,6 +126,7 @@ class yolo_counting_model:
                                                           of movement corresponding to polygon keys.
         """
         self.model_name = name
+        self.depth_map = config["depth_map"]
         self.camera_intrinsic = config["camera_intrinsic"]
         self.study_name = config["study_name"]
         self.iou_threshold = config["iou_threshold"]
