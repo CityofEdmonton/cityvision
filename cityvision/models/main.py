@@ -98,7 +98,13 @@ def get_depth_map(frame: np.ndarray, camera_intrinsic: os.path) -> np.ndarray:
         .numpy()
     )
 
-    return prediction, camera_matrix, np.array(camera_intrinsic["dis_vec"]), roi, newcameramtx
+    return (
+        prediction,
+        camera_matrix,
+        np.array(camera_intrinsic["dis_vec"]),
+        roi,
+        newcameramtx,
+    )
 
 
 class yolo_counting_model:
@@ -133,11 +139,19 @@ class yolo_counting_model:
         """
         self.model_name = name
         self.first_frame = frame
-        self.depth_map, self.camera_intrinsic, self.camera_distortion, self.roi, self.new_camera_matrix = get_depth_map(frame, config["camera_intrinsic"])
+        (
+            self.depth_map,
+            self.camera_intrinsic,
+            self.camera_distortion,
+            self.roi,
+            self.new_camera_matrix,
+        ) = get_depth_map(frame, config["camera_intrinsic"])
         self.study_name = config["study_name"]
         self.iou_threshold = config["iou_threshold"]
         self.confidence_threshold = config["confidence_threshold"]
-        self.direction_vector = config["direction_vector"]  # Dict of vector directions e.g. {"EB": [[x1, y1], [x2, y2]], "WB": [[x1, y1], [x2, y2]]}
+        self.direction_vector = config[
+            "direction_vector"
+        ]  # Dict of vector directions e.g. {"EB": [[x1, y1], [x2, y2]], "WB": [[x1, y1], [x2, y2]]}
         self.classes = config["classes"]
         self.tracker_config = config["tracker_config"]
         self.report_path = config["report_path"]
@@ -327,12 +341,14 @@ class yolo_counting_model:
                     track.pop(0)
 
                 speed_estimate = "N/A"
-                if len(track) > 15:  
+                if len(track) > 15:
                     # calculate speed and direction if more than 15 points
                     speed_estimate = self.calculate_speed(track, annotated_frame)
                     if speed_estimate != "N/A":
                         speed.append(speed_estimate)
-                        speed_estimate = np.mean(speed)  # average speed over last 15 frames
+                        speed_estimate = np.mean(
+                            speed
+                        )  # average speed over last 15 frames
 
                     # get direction vector and compare with the polygon direction
 
@@ -396,9 +412,11 @@ class yolo_counting_model:
                                 time_seen.strftime("%Y-%m-%d %H:%M:%S"),
                                 cls,
                             ]
-                
+
                 # Create formatted text with better layout and colors
-                speed_text = f"{speed_estimate:.1f} km/h" if speed_estimate != "N/A" else "N/A"
+                speed_text = (
+                    f"{speed_estimate:.1f} km/h" if speed_estimate != "N/A" else "N/A"
+                )
                 direction_text = ""
                 if track_id in self.crossed_objects[self.direction[0]]:
                     direction_text = self.direction[0]
@@ -536,7 +554,7 @@ class yolo_counting_model:
         resampled_df.rename(columns={"index": "timestep"}, inplace=True)
 
         return resampled_df.copy()
-    
+
     def _undistort_pt(self, pt_matrix: list, frame: np.ndarray) -> np.ndarray:
 
         h, w = frame.shape[:2]
@@ -545,7 +563,11 @@ class yolo_counting_model:
             self.camera_intrinsic, self.camera_distortion, (w, h), 1, (w, h)
         )
         undst_pt = cv2.undistortPoints(
-            pt_matrix, self.camera_intrinsic, self.camera_distortion, None, P=newcameramtx
+            pt_matrix,
+            self.camera_intrinsic,
+            self.camera_distortion,
+            None,
+            P=newcameramtx,
         )
 
         undst_pt = undst_pt.squeeze()
@@ -554,15 +576,24 @@ class yolo_counting_model:
         undst_pt[1] -= y
 
         return undst_pt
-    
 
-    def calculate_distance(self,x1, y1, x2, y2):
+    def calculate_distance(self, x1, y1, x2, y2):
         # Get the depth values at the two points
 
-        if y1 < 0 or y1 >= self.depth_map.shape[0] or x1 < 0 or x1 >= self.depth_map.shape[1]:
+        if (
+            y1 < 0
+            or y1 >= self.depth_map.shape[0]
+            or x1 < 0
+            or x1 >= self.depth_map.shape[1]
+        ):
             return "N/A"
 
-        if y2 < 0 or y2 >= self.depth_map.shape[0] or x2 < 0 or x2 >= self.depth_map.shape[1]:
+        if (
+            y2 < 0
+            or y2 >= self.depth_map.shape[0]
+            or x2 < 0
+            or x2 >= self.depth_map.shape[1]
+        ):
             return "N/A"
 
         z1 = self.depth_map[y1, x1]
