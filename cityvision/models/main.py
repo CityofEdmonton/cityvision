@@ -85,14 +85,20 @@ def get_depth_map(frame: np.ndarray, camera_intrinsic: os.path) -> np.ndarray:
         outputs = model(**inputs)
         predicted_depth = outputs.predicted_depth
 
-    prediction = torch.nn.functional.interpolate(
-        predicted_depth.unsqueeze(1),
-        size=undistorted_image.size[::-1],
-        mode="bicubic",
-        align_corners=False,
+    prediction = (
+        torch.nn.functional.interpolate(
+            predicted_depth.unsqueeze(1),
+            size=undistorted_image.size[::-1],
+            mode="bicubic",
+            align_corners=False,
+        )
+        .squeeze(0)
+        .squeeze(0)
+        .cpu()
+        .numpy()
     )
 
-    return prediction.cpu().numpy()
+    return prediction, camera_matrix, np.array(camera_intrinsic["dis_vec"]), roi, newcameramtx
 
 
 class yolo_counting_model:
@@ -106,7 +112,7 @@ class yolo_counting_model:
     potentially to Google Cloud Storage.
     """
 
-    def __init__(self, name: str, config: dict) -> None:
+    def __init__(self, frame: np.ndarray, name: str, config: dict) -> None:
         """
         Initializes the yolo_counting_model.
 
@@ -126,14 +132,12 @@ class yolo_counting_model:
                                                           of movement corresponding to polygon keys.
         """
         self.model_name = name
-        self.depth_map = config["depth_map"]
-        self.camera_intrinsic = config["camera_intrinsic"]
+        self.first_frame = frame
+        self.depth_map, self.camera_intrinsic, self.camera_distortion, self.roi, self.new_camera_matrix = get_depth_map(frame, config["camera_intrinsic"])
         self.study_name = config["study_name"]
         self.iou_threshold = config["iou_threshold"]
         self.confidence_threshold = config["confidence_threshold"]
-        self.direction_vector = config[
-            "direction_vector"
-        ]  # Dict of vector directions e.g. {"EB": [[x1, y1], [x2, y2]], "WB": [[x1, y1], [x2, y2]]}
+        self.direction_vector = config["direction_vector"]  # Dict of vector directions e.g. {"EB": [[x1, y1], [x2, y2]], "WB": [[x1, y1], [x2, y2]]}
         self.classes = config["classes"]
         self.tracker_config = config["tracker_config"]
         self.report_path = config["report_path"]
@@ -322,10 +326,13 @@ class yolo_counting_model:
                 if len(track) > 60:  # retain 30 tracks for 30 frames
                     track.pop(0)
 
-                if (
-                    len(track) > 15
-                ):  # calculate speed and direction if more than 15 points
-                    # TO-DO: Calculate speed and direction
+                speed_estimate = "N/A"
+                if len(track) > 15:  
+                    # calculate speed and direction if more than 15 points
+                    speed_estimate = self.calculate_speed(track, annotated_frame)
+                    if speed_estimate != "N/A":
+                        speed.append(speed_estimate)
+                        speed_estimate = np.mean(speed)  # average speed over last 15 frames
 
                     # get direction vector and compare with the polygon direction
 
@@ -389,16 +396,48 @@ class yolo_counting_model:
                                 time_seen.strftime("%Y-%m-%d %H:%M:%S"),
                                 cls,
                             ]
+                
+                # Create formatted text with better layout and colors
+                speed_text = f"{speed_estimate:.1f} km/h" if speed_estimate != "N/A" else "N/A"
+                direction_text = ""
+                if track_id in self.crossed_objects[self.direction[0]]:
+                    direction_text = self.direction[0]
+                elif track_id in self.crossed_objects[self.direction[1]]:
+                    direction_text = self.direction[1]
+                else:
+                    direction_text = "Unknown"
 
-                # write the track ID and class name and direction on the frame
+                # Main label with ID and class
                 cv2.putText(
                     annotated_frame,
-                    f"ID: {track_id} {cls} Dir: {self.direction[0] if track_id in self.crossed_objects[self.direction[0]] else (self.direction[1] if track_id in self.crossed_objects[self.direction[1]] else 'Unknown')}",
-                    (int(x - w / 2), int(y - h / 2) + 20),
+                    f"ID: {track_id} | {cls}",
+                    (int(x - w / 2), int(y - h / 2) - 10),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (255, 0, 0),
-                    1,
+                    0.8,
+                    (0, 0, 0),
+                    2,
+                )
+
+                # Direction label
+                cv2.putText(
+                    annotated_frame,
+                    f"Direction: {direction_text}",
+                    (int(x - w / 2), int(y - h / 2) + 15),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 0, 0),
+                    2,
+                )
+
+                # Speed label
+                cv2.putText(
+                    annotated_frame,
+                    f"Speed: {speed_text}",
+                    (int(x - w / 2), int(y - h / 2) + 35),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 0, 0),
+                    2,
                 )
 
                 # Annotate center of the object
@@ -459,7 +498,8 @@ class yolo_counting_model:
         class_names = [self.classes[i] for i in class_ids]
 
         # Visualize the results on the frame
-        annotated_frame = results[0].plot()
+        # annotated_frame = results[0].plot()
+        annotated_frame = frame.copy()
 
         return (results, boxes, class_ids, class_names, annotated_frame)
 
@@ -496,6 +536,91 @@ class yolo_counting_model:
         resampled_df.rename(columns={"index": "timestep"}, inplace=True)
 
         return resampled_df.copy()
+    
+    def _undistort_pt(self, pt_matrix: list, frame: np.ndarray) -> np.ndarray:
+
+        h, w = frame.shape[:2]
+
+        newcameramtx, roi = cv2.getOptimalNewCameraMatrix(
+            self.camera_intrinsic, self.camera_distortion, (w, h), 1, (w, h)
+        )
+        undst_pt = cv2.undistortPoints(
+            pt_matrix, self.camera_intrinsic, self.camera_distortion, None, P=newcameramtx
+        )
+
+        undst_pt = undst_pt.squeeze()
+        x, y, w, h = roi
+        undst_pt[0] -= x
+        undst_pt[1] -= y
+
+        return undst_pt
+    
+
+    def calculate_distance(self,x1, y1, x2, y2):
+        # Get the depth values at the two points
+
+        if y1 < 0 or y1 >= self.depth_map.shape[0] or x1 < 0 or x1 >= self.depth_map.shape[1]:
+            return "N/A"
+
+        if y2 < 0 or y2 >= self.depth_map.shape[0] or x2 < 0 or x2 >= self.depth_map.shape[1]:
+            return "N/A"
+
+        z1 = self.depth_map[y1, x1]
+        z2 = self.depth_map[y2, x2]
+
+        camera_matrix = self.camera_intrinsic
+
+        # Calculate the 3D coordinates of the two points
+        p1 = np.array(
+            [
+                (x1 - camera_matrix[0, 2]) * z1 / camera_matrix[0, 0],
+                (y1 - camera_matrix[1, 2]) * z1 / camera_matrix[1, 1],
+                z1,
+            ]
+        )
+        p2 = np.array(
+            [
+                (x2 - camera_matrix[0, 2]) * z2 / camera_matrix[0, 0],
+                (y2 - camera_matrix[1, 2]) * z2 / camera_matrix[1, 1],
+                z2,
+            ]
+        )
+
+        # Calculate the distance between the two points
+        distance = np.linalg.norm(p2 - p1) / 1.5
+
+        return distance
+
+    def calculate_speed(self, track: list, frame: np.ndarray):
+        """
+        Calculates the speed of a tracked object based on its trajectory.
+
+        Args:
+                track: A list of tuples representing the (x, y) coordinates of the object's trajectory.
+                fps: Frames per second of the video, used to convert pixel distance to real-world speed.
+
+        Returns:
+                The calculated speed in pixels per second.
+        """
+
+        undst_pt_1 = self._undistort_pt(np.array(track[-1]), frame)
+        undst_pt_2 = self._undistort_pt(np.array(track[-15]), frame)
+        x1, y1 = undst_pt_1[0], undst_pt_1[1]
+        x2, y2 = undst_pt_2[0], undst_pt_2[1]
+
+        distance = self.calculate_distance(
+            int(x2),
+            int(y2),
+            int(x1),
+            int(y1),
+        )
+
+        if distance != "N/A":
+            time = 15 / 30
+            speed = distance / time * 3.6
+            return speed
+        else:
+            return "N/A"
 
     def generate_report(self, uuid: str) -> pd.DataFrame:
         """
