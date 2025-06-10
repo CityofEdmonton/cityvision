@@ -341,14 +341,14 @@ class yolo_counting_model:
                     track.pop(0)
 
                 speed_estimate = "N/A"
-                if len(track) > 15:
-                    # calculate speed and direction if more than 15 points
+                if len(track) > 2:
+                    # calculate speed and direction if more than 2 points
                     speed_estimate = self.calculate_speed(track, annotated_frame)
                     if speed_estimate != "N/A":
                         speed.append(speed_estimate)
                         speed_estimate = np.mean(
                             speed
-                        )  # average speed over last 15 frames
+                        )  # average speed over last 5 frames
 
                     # get direction vector and compare with the polygon direction
 
@@ -634,8 +634,8 @@ class yolo_counting_model:
                 The calculated speed in pixels per second.
         """
 
-        undst_pt_1 = self._undistort_pt(np.array(track[-1]), frame)
-        undst_pt_2 = self._undistort_pt(np.array(track[-15]), frame)
+        undst_pt_1 = self._undistort_pt(np.array(track[0]), frame)
+        undst_pt_2 = self._undistort_pt(np.array(track[-1]), frame)
         x1, y1 = undst_pt_1[0], undst_pt_1[1]
         x2, y2 = undst_pt_2[0], undst_pt_2[1]
 
@@ -647,7 +647,7 @@ class yolo_counting_model:
         )
 
         if distance != "N/A":
-            time = 15 / 30
+            time = len(track) / 30
             speed = distance / time * 3.6
             return speed
         else:
