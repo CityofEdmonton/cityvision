@@ -12,17 +12,20 @@ import zipfile
 import yaml
 from typing import Union, Tuple
 import sys
+import wandb
+from ultralytics import settings
 
 # --- Configuration ---
 GCS_BUCKET_NAME = "open-cityvision"
-GCS_DATA_PATH = "."  # Path *within* your GCS bucket to the dataset root
+GCS_DATA_PATH = "."  # Path within the GCS bucket to the dataset root
 LOCAL_DATA_DIR = os.getcwd()  # the current directory where the data will be downloaded
 
 # YOLO Model Configuration
 IMG_SIZE = 640
-BATCH_SIZE = 16
-DEVICE = "cpu"  # 0 for GPU (if available), 'cpu' for CPU
-EPOCHS = 10
+BATCH_SIZE = 64
+DEVICE = 0
+EPOCHS = 100
+
 
 def download_data_from_gcs(bucket_name: str, gcs_path: str, local_dir: str) -> None:
     """
@@ -38,8 +41,7 @@ def download_data_from_gcs(bucket_name: str, gcs_path: str, local_dir: str) -> N
         prefix = ""
     else:
         # Ensure the prefix ends with a '/' to treat it as a directory
-        prefix = gcs_path.rstrip('/') + '/'
-
+        prefix = gcs_path.rstrip("/") + "/"
 
     print(
         f"Attempting to download data from gs://{bucket_name}/{gcs_path} to {local_dir}"
@@ -53,8 +55,7 @@ def download_data_from_gcs(bucket_name: str, gcs_path: str, local_dir: str) -> N
         os.makedirs(local_dir, exist_ok=True)
 
         blobs = bucket.list_blobs(
-            prefix=prefix,
-            delimiter="/"
+            prefix=prefix, delimiter="/"
         )  # List all blobs with the given prefix
         downloaded_count = 0
         for blob in blobs:
@@ -85,6 +86,7 @@ def download_data_from_gcs(bucket_name: str, gcs_path: str, local_dir: str) -> N
         )
         exit(1)  # Exit if data download fails
 
+
 # unzipping files
 def unzipDataset(folderPath: str) -> None:
     """
@@ -105,6 +107,7 @@ def unzipDataset(folderPath: str) -> None:
         os.remove(fullPath)
     return filename
 
+
 # --- 2. Function to Train YOLO Model ---
 def train_yolo_model(
     data_yaml_path: str,
@@ -113,6 +116,7 @@ def train_yolo_model(
     img_size: int,
     batch_size: int,
     device: str,
+    wandb: bool = False,
     hsv_h_range: Union[float, Tuple[float, float]] = 0.05,
     hsv_s_range: Union[float, Tuple[float, float]] = 0.5,
     hsv_v_range: Union[float, Tuple[float, float]] = 0.3,
@@ -132,7 +136,11 @@ def train_yolo_model(
     """
     try:
         print(f"\n--- Starting YOLO Model Training with {model} ---")
-        # Train the model        
+        if wandb:
+            print("WandB logging is enabled.")
+        else:
+            print("WandB logging is disabled. Training will not log to WandB.")
+        # Train the model
         results = model.train(
             data=data_yaml_path,
             epochs=epochs,
@@ -151,10 +159,12 @@ def train_yolo_model(
             shear=0.0,  # Image shearing
             perspective=0.0,  # Image perspective transformation
             flipud=0.0,  # Flip image upside down
-            fliplr=0.0,  # Flip image left-right
+            fliplr=1.0,  # Flip image left-right
             mosaic=0.0,  # Disable mosaic augmentation
             mixup=0.0,  # Disable mixup augmentation
             copy_paste=0.0,  # Disable copy-paste augmentation
+            project="ultralytics_yolo_project",
+            name="yolov11m_run",
             # auto_augment=None # Ensure auto_augment is not overriding
         )
 
@@ -168,10 +178,28 @@ def train_yolo_model(
             "Please ensure Ultralytics is installed (`pip install ultralytics`) "
             "and your dataset `data.yaml` is correctly configured."
         )
-        exit(1)
+        exit(1)  # --- Main Execution Flow ---
 
-# --- Main Execution Flow ---
+
 if __name__ == "__main__":
+
+    # 1. Download data from GCS
+    download_data_from_gcs(GCS_BUCKET_NAME, GCS_DATA_PATH, LOCAL_DATA_DIR)
+    # 2. Unzip the downloaded files
+    dataset_name = unzipDataset(LOCAL_DATA_DIR)
+    # get the location of the data.yaml file
+    yaml_path = os.path.join(dataset_name, "data.yaml")
+    # 3. Train the YOLO model
+    model = YOLO("yolo11m.pt")
+    train_yolo_model(
+        data_yaml_path=yaml_path,
+        model=model,
+        epochs=EPOCHS,
+        img_size=IMG_SIZE,
+        batch_size=BATCH_SIZE,
+        device=DEVICE,
+        wandb=True,  # Enable WandB logging
+    )
 
     # 1. Download data from GCS
     download_data_from_gcs(GCS_BUCKET_NAME, GCS_DATA_PATH, LOCAL_DATA_DIR)
