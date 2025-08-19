@@ -100,35 +100,35 @@ class TestDownloadDataFromGCS:
         # Assertions
         mock_print.assert_any_call("An error occurred: GCS connection failed")
 
-# class TestUnzipDataset:
-#     """Test cases for unzipDataset function."""
+class TestUnzipDataset:
+    """Test cases for unzipDataset function."""
 
-#     def test_unzipDataset_success(self):
-#         """Test successful unzipping of dataset files."""
-#         with tempfile.TemporaryDirectory() as temp_dir:
-#             # Create a test zip file
-#             test_file_path = os.path.join(temp_dir, "test.zip")
-#             with zipfile.ZipFile(test_file_path, 'w') as zipf:
-#                 zipf.writestr("test.txt", "test content")
+    def test_unzipDataset_success(self):
+        """Test successful unzipping of dataset files."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create a test zip file
+            test_file_path = os.path.join(temp_dir, "test.zip")
+            with zipfile.ZipFile(test_file_path, 'w') as zipf:
+                zipf.writestr("test.txt", "test content")
             
-#             # Create a non-zip file
-#             non_zip_file = os.path.join(temp_dir, "test.txt")
-#             with open(non_zip_file, 'w') as f:
-#                 f.write("test")
+            # Create a non-zip file
+            non_zip_file = os.path.join(temp_dir, "test.txt")
+            with open(non_zip_file, 'w') as f:
+                f.write("test")
             
-#             # Test
-#             unzipDataset(temp_dir)
+            # Test
+            unzipDataset(temp_dir)
             
-#             # Assertions
-#             assert not os.path.exists(test_file_path)  # Zip file should be removed
-#             assert os.path.exists(os.path.join(temp_dir, "test.txt"))  # Content should be extracted
-#             assert os.path.exists(non_zip_file)  # Non-zip file should remain
+            # Assertions
+            assert not os.path.exists(test_file_path)  # Zip file should be removed
+            assert os.path.exists(os.path.join(temp_dir, "test.txt"))  # Content should be extracted
+            assert os.path.exists(non_zip_file)  # Non-zip file should remain
 
-#     def test_unzipDataset_empty_directory(self):
-#         """Test unzipping from an empty directory."""
-#         with tempfile.TemporaryDirectory() as temp_dir:
-#             # Should not raise any exception
-#             unzipDataset(temp_dir)
+    def test_unzipDataset_empty_directory(self):
+        """Test unzipping from an empty directory."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Should not raise any exception
+            unzipDataset(temp_dir)
 
 # class TestTrainYoloModel:
 #     """Test cases for train_yolo_model function."""
