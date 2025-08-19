@@ -88,13 +88,17 @@ def download_data_from_gcs(bucket_name: str, gcs_path: str, local_dir: str) -> N
 
 
 # unzipping files
-def unzipDataset(folderPath: str) -> None:
+def unzipDataset(folderPath: str) -> str | None:
     """
     Unzips all .zip files in the specified folder.
     Args:
         folderPath (str): The path to the folder containing .zip files.
+
+    Returns:
+        str | None: The name of the last unzipped folder or None if no .zip files were found.
     """
     files = os.listdir(folderPath)
+    files_unzipped = 0
     for file in files:
         if not file.endswith(".zip"):
             continue
@@ -103,8 +107,11 @@ def unzipDataset(folderPath: str) -> None:
         if os.path.isfile(fullPath):
             with zipfile.ZipFile(fullPath, "r") as zip_ref:
                 zip_ref.extractall(os.path.join(folderPath, filename))
-
+        files_unzipped += 1
         os.remove(fullPath)
+    if files_unzipped == 0:
+        print(f"No .zip files found in {folderPath}. Please check the directory.")
+        return None
     return filename
 
 
