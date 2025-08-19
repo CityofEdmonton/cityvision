@@ -130,86 +130,86 @@ class TestUnzipDataset:
             # Should not raise any exception
             unzipDataset(temp_dir)
 
-# class TestTrainYoloModel:
-#     """Test cases for train_yolo_model function."""
+class TestTrainYoloModel:
+    """Test cases for train_yolo_model function."""
 
-#     @patch('train.YOLO')
-#     def test_train_yolo_model_success(self, mock_yolo_class):
-#         """Test successful YOLO model training."""
-#         # Mock setup
-#         mock_model = Mock()
-#         mock_yolo_class.return_value = mock_model
-#         mock_model.train.return_value = Mock()
+    @patch('notebooks.train.YOLO')
+    def test_train_yolo_model_success(self, mock_yolo_class):
+        """Test successful YOLO model training."""
+        # Mock setup
+        mock_model = Mock()
+        mock_yolo_class.return_value = mock_model
+        mock_model.train.return_value = Mock()
         
-#         # Test
-#         train_yolo_model(
-#             data_yaml_path="test_data.yaml",
-#             model=mock_model,
-#             epochs=5,
-#             img_size=640,
-#             batch_size=16,
-#             device="cpu"
-#         )
+        # Test
+        train_yolo_model(
+            data_yaml_path="test_data.yaml",
+            model=mock_model,
+            epochs=5,
+            img_size=640,
+            batch_size=16,
+            device="cpu"
+        )
         
-#         # Assertions
-#         mock_model.train.assert_called_once()
-#         call_args = mock_model.train.call_args
-#         assert call_args[1]["data"] == "test_data.yaml"
-#         assert call_args[1]["epochs"] == 5
-#         assert call_args[1]["imgsz"] == 640
-#         assert call_args[1]["batch"] == 16
-#         assert call_args[1]["device"] == "cpu"
-#         assert call_args[1]["val"] is False
+        # Assertions
+        mock_model.train.assert_called_once()
+        call_args = mock_model.train.call_args
+        assert call_args[1]["data"] == "test_data.yaml"
+        assert call_args[1]["epochs"] == 5
+        assert call_args[1]["imgsz"] == 640
+        assert call_args[1]["batch"] == 16
+        assert call_args[1]["device"] == "cpu"
+        assert call_args[1]["val"] is False
 
-#     @patch('train.YOLO')
-#     def test_train_yolo_model_with_custom_hsv(self, mock_yolo_class):
-#         """Test YOLO model training with custom HSV parameters."""
-#         # Mock setup
-#         mock_model = Mock()
-#         mock_yolo_class.return_value = mock_model
-#         mock_model.train.return_value = Mock()
+    @patch('notebooks.train.YOLO')
+    def test_train_yolo_model_with_custom_hsv(self, mock_yolo_class):
+        """Test YOLO model training with custom HSV parameters."""
+        # Mock setup
+        mock_model = Mock()
+        mock_yolo_class.return_value = mock_model
+        mock_model.train.return_value = Mock()
         
-#         # Test
-#         train_yolo_model(
-#             data_yaml_path="test_data.yaml",
-#             model=mock_model,
-#             epochs=5,
-#             img_size=640,
-#             batch_size=16,
-#             device="cpu",
-#             hsv_h_range=0.1,
-#             hsv_s_range=0.6,
-#             hsv_v_range=0.4
-#         )
+        # Test
+        train_yolo_model(
+            data_yaml_path="test_data.yaml",
+            model=mock_model,
+            epochs=5,
+            img_size=640,
+            batch_size=16,
+            device="cpu",
+            hsv_h_range=0.1,
+            hsv_s_range=0.6,
+            hsv_v_range=0.4
+        )
         
-#         # Assertions
-#         call_args = mock_model.train.call_args
-#         assert call_args[1]["hsv_h"] == 0.1
-#         assert call_args[1]["hsv_s"] == 0.6
-#         assert call_args[1]["hsv_v"] == 0.4
+        # Assertions
+        call_args = mock_model.train.call_args
+        assert call_args[1]["hsv_h"] == 0.1
+        assert call_args[1]["hsv_s"] == 0.6
+        assert call_args[1]["hsv_v"] == 0.4
 
-#     @patch('train.YOLO')
-#     def test_train_yolo_model_exception(self, mock_yolo_class):
-#         """Test handling of exceptions during training."""
-#         # Mock setup
-#         mock_model = Mock()
-#         mock_yolo_class.return_value = mock_model
-#         mock_model.train.side_effect = Exception("Training failed")
+    @patch('notebooks.train.YOLO')
+    def test_train_yolo_model_exception(self, mock_yolo_class):
+        """Test handling of exceptions during training."""
+        # Mock setup
+        mock_model = Mock()
+        mock_yolo_class.return_value = mock_model
+        mock_model.train.side_effect = Exception("Training failed")
         
-#         # Test
-#         with patch('builtins.print') as mock_print:
-#             with pytest.raises(SystemExit):
-#                 train_yolo_model(
-#                     data_yaml_path="test_data.yaml",
-#                     model=mock_model,
-#                     epochs=5,
-#                     img_size=640,
-#                     batch_size=16,
-#                     device="cpu"
-#                 )
+        # Test
+        with patch('builtins.print') as mock_print:
+            with pytest.raises(SystemExit):
+                train_yolo_model(
+                    data_yaml_path="test_data.yaml",
+                    model=mock_model,
+                    epochs=5,
+                    img_size=640,
+                    batch_size=16,
+                    device="cpu"
+                )
         
-#         # Assertions
-#         mock_print.assert_any_call("Error during YOLO model training: Training failed")
+        # Assertions
+        mock_print.assert_any_call("Error during YOLO model training: Training failed")
 
 # class TestConstants:
 #     """Test cases for module constants."""
