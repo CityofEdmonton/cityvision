@@ -18,11 +18,8 @@ from notebooks.train import (
     train_yolo_model,
     GCS_BUCKET_NAME,
     GCS_DATA_PATH,
-    LOCAL_DATA_DIR,
     IMG_SIZE,
-    BATCH_SIZE,
     DEVICE,
-    EPOCHS,
 )
 
 
@@ -211,18 +208,15 @@ class TestTrainYoloModel:
         # Assertions
         mock_print.assert_any_call("Error during YOLO model training: Training failed")
 
-# class TestConstants:
-#     """Test cases for module constants."""
+class TestConstants:
+    """Test cases for module constants."""
 
-#     def test_constants_are_defined(self):
-#         """Test that all expected constants are defined."""
-#         assert GCS_BUCKET_NAME == "open-cityvision"
-#         assert GCS_DATA_PATH == "Dataset/"
-#         assert LOCAL_DATA_DIR == "yolo_dataset/"
-#         assert IMG_SIZE == 640
-#         assert BATCH_SIZE == 16
-#         assert DEVICE == "cpu"
-#         assert EPOCHS == 10
+    def test_constants_are_defined(self):
+        """Test that all expected constants are defined."""
+        assert GCS_BUCKET_NAME == "open-cityvision"
+        assert GCS_DATA_PATH == "."
+        assert IMG_SIZE == 640
+        assert DEVICE == 0
 
 
 if __name__ == "__main__":
