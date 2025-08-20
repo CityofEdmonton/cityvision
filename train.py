@@ -9,7 +9,6 @@ import random
 import cv2
 import numpy as np
 import zipfile
-import yaml
 from typing import Union, Tuple
 import sys
 
