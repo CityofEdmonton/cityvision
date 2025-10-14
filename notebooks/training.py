@@ -179,7 +179,7 @@ def train_yolo_model(
         exit(1)
 
 
-def train_with_data_in_cloud():
+def train_with_data_in_cloud(pretrained_path=None):
     # 1. Download data from GCS
     download_data_from_gcs(GCS_BUCKET_NAME, GCS_DATA_PATH, LOCAL_DATA_DIR)
     # 2. Unzip the downloaded files
@@ -188,6 +188,10 @@ def train_with_data_in_cloud():
     yaml_path = os.path.join(dataset_name, "data.yaml")
     # 3. Train the YOLO model
     print("the path from yaml is ", yaml_path)
+    if pretrained_path:
+        model = YOLO(pretrained_path)
+    else:
+        model = YOLO("yolo11l.pt")
     model = YOLO("yolo11l.pt")
     train_yolo_model(
         data_yaml_path=yaml_path,
@@ -201,11 +205,14 @@ def train_with_data_in_cloud():
     return model
 
 
-def train_with_data_locally(dataset_location):
+def train_with_data_locally(dataset_location, pretrained_path=None):
     # get the location of the data.yaml file
     yaml_path = os.path.join(dataset_location, "data.yaml")
     # 3. Train the YOLO model
-    model = YOLO("yolo11l.pt")
+    if pretrained_path:
+        model = YOLO(pretrained_path)
+    else:
+        model = YOLO("yolo11l.pt")
     train_yolo_model(
         data_yaml_path=yaml_path,
         model=model,
@@ -221,5 +228,6 @@ def train_with_data_locally(dataset_location):
 if __name__ == "__main__":
     print("Starting the training script...")
     # train model based on where the data is
-    model = train_with_data_in_cloud()
+    best_model_path = "~/projects/newdir/cityvision/notebooks/ultralytics_yolo_project/yolov11l_run8/weights/best.pt"
+    model = train_with_data_in_cloud(best_model_path)
     # model = train_with_data_locally(os.path.join("yolo_dataset", "2025-1-07_len_14200"))
