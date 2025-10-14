@@ -64,13 +64,15 @@ def download_data_from_gcs(bucket_name: str, gcs_path: str, local_dir: str) -> N
         exit(1)  # Exit if data download fails
 
 
-def unzipDataset(folderPath: str) -> None:
+def unzipDataset(folderPath: str) -> str | None:
     """
     Unzips all .zip files in the specified folder.
     Args:
         folderPath (str): The path to the folder containing .zip files.
+    Returns: Name of the folder unzipped
     """
     files = os.listdir(folderPath)
+    filename = None
     for file in files:
         if not file.endswith(".zip"):
             continue

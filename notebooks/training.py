@@ -3,7 +3,7 @@ from ultralytics import YOLO
 import os
 from typing import Union, Tuple
 from ultralytics import settings
-from utils import download_data_from_gcs, unzipDataset
+from notebooks.utils import download_data_from_gcs, unzipDataset
 
 
 # --- Configuration ---
