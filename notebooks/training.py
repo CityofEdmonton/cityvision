@@ -226,11 +226,6 @@ def train_with_data_locally(dataset_location):
 if __name__ == "__main__":
     print("Starting the training script...")
     # train model based on where the data is
-    #model = train_with_data_in_cloud()
+    model = train_with_data_in_cloud()
     # model = train_with_data_locally(os.path.join("yolo_dataset", "2025-1-07_len_14200"))
 
-    # load a pre-trained model and fine-tune it
-    model = YOLO("yolo11l.pt")  # load a pretrained model (
-
-    for name , param in model.named_parameters():
-        print(name, param.requires_grad)
