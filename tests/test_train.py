@@ -12,9 +12,7 @@ from pathlib import Path
 # Add the parent directory to the path to import train module
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from notebooks.train import (
-    download_data_from_gcs,
-    unzipDataset,
+from notebooks.training import (
     train_yolo_model,
     GCS_BUCKET_NAME,
     GCS_DATA_PATH,
@@ -22,11 +20,16 @@ from notebooks.train import (
     DEVICE,
 )
 
+from notebooks.utils import (
+    download_data_from_gcs,
+    unzipDataset,
+)
+
 
 class TestDownloadDataFromGCS:
     """Test cases for download_data_from_gcs function."""
 
-    @patch("notebooks.train.storage.Client")
+    @patch("notebooks.utils.storage.Client")
     def test_download_data_from_gcs_success(self, mock_storage_client):
         """Test successful download of data from GCS."""
         # Mock setup
@@ -60,7 +63,7 @@ class TestDownloadDataFromGCS:
         assert mock_blob2.download_to_filename.call_count == 1
         assert mock_blob3.download_to_filename.call_count == 0
 
-    @patch("notebooks.train.storage.Client")
+    @patch("notebooks.utils.storage.Client")
     def test_download_data_from_gcs_no_zip_files(self, mock_storage_client):
         """Test when no zip files are found in GCS."""
         # Mock setup
@@ -83,7 +86,7 @@ class TestDownloadDataFromGCS:
         expected_message = "No zipped files found or downloaded from gs://test-bucket/Dataset/. Please check bucket name and GCS path, and ensure there are .zip files present."
         mock_print.assert_any_call(expected_message)
 
-    @patch("notebooks.train.storage.Client")
+    @patch("notebooks.utils.storage.Client")
     def test_download_data_from_gcs_exception(self, mock_storage_client):
         """Test handling of exceptions during download."""
         # Mock setup
@@ -134,7 +137,7 @@ class TestUnzipDataset:
 class TestTrainYoloModel:
     """Test cases for train_yolo_model function."""
 
-    @patch("notebooks.train.YOLO")
+    @patch("notebooks.training.YOLO")
     def test_train_yolo_model_success(self, mock_yolo_class):
         """Test successful YOLO model training."""
         # Mock setup
@@ -162,7 +165,7 @@ class TestTrainYoloModel:
         assert call_args[1]["device"] == "cpu"
         assert call_args[1]["val"] is False
 
-    @patch("notebooks.train.YOLO")
+    @patch("notebooks.training.YOLO")
     def test_train_yolo_model_with_custom_hsv(self, mock_yolo_class):
         """Test YOLO model training with custom HSV parameters."""
         # Mock setup
@@ -189,7 +192,7 @@ class TestTrainYoloModel:
         assert call_args[1]["hsv_s"] == 0.6
         assert call_args[1]["hsv_v"] == 0.4
 
-    @patch("notebooks.train.YOLO")
+    @patch("notebooks.training.YOLO")
     def test_train_yolo_model_exception(self, mock_yolo_class):
         """Test handling of exceptions during training."""
         # Mock setup
