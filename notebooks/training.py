@@ -17,7 +17,9 @@ MLFLOW_EXPERIMENT_NAME = "ultralytics_yolo_project"
 IMG_SIZE = 640
 BATCH_SIZE = 64
 DEVICE = 0
-EPOCHS = 100
+EPOCHS = 200
+FREEZE_LAYERS = 10
+LEARNING_RATE = 2e-4
 
 
 # def download_data_from_gcs(bucket_name: str, gcs_path: str, local_dir: str) -> None:
@@ -112,7 +114,7 @@ def train_yolo_model(
     mlflow_tracking: bool = False,
     hsv_h_range: Union[float, Tuple[float, float]] = 0.05,
     hsv_s_range: Union[float, Tuple[float, float]] = 0.5,
-    hsv_v_range: Union[float, Tuple[float, float]] = 0.3,
+    hsv_v_range: Union[float, Tuple[float, float]] = 0.5,
 ) -> None:
     """
     Trains a YOLO model with specified parameters.
@@ -144,7 +146,10 @@ def train_yolo_model(
             imgsz=img_size,
             batch=batch_size,
             device=device,
-            val=False,  # Enable validation during training
+            freeze = FREEZE_LAYERS, # Freeze the first 10 layers
+            lr  = LEARNING_RATE, 
+            plots = True, 
+            val = True,
             # --- ONLY HSV Augmentations ---
             hsv_h=hsv_h_range,  # Hue augmentation (randomly adjusted within +/- hsv_h_range)
             hsv_s=hsv_s_range,  # Saturation augmentation (randomly adjusted within +/- hsv_s_range)
@@ -221,5 +226,11 @@ def train_with_data_locally(dataset_location):
 if __name__ == "__main__":
     print("Starting the training script...")
     # train model based on where the data is
-    model = train_with_data_in_cloud()
+    #model = train_with_data_in_cloud()
     # model = train_with_data_locally(os.path.join("yolo_dataset", "2025-1-07_len_14200"))
+
+    # load a pre-trained model and fine-tune it
+    model = YOLO("yolo11l.pt")  # load a pretrained model (
+
+    for name , param in model.named_parameters():
+        print(name, param.requires_grad)
