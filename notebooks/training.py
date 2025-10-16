@@ -20,14 +20,13 @@ DEVICE = 0
 EPOCHS = 100
 FREEZE_LAYERS = 10
 LEARNING_RATE = 2e-4
-ML_FLOW_TRACKING = True 
+ML_FLOW_TRACKING = True
 AUGMENTATION = {
     "hsv_h_range": 0.015,  # Hue augmentation (randomly adjusted within +/- 0.015)
-    "hsv_s_range": 0.3,    # Saturation augmentation (randomly adjusted within +/- 0.3)
-    "hsv_v_range": 0.3,    # Brightness augmentation (randomly adjusted within +/- 0.3)
-    "fliplr": 0.5,         # Flip image left-right with a probability of 0.5
+    "hsv_s_range": 0.3,  # Saturation augmentation (randomly adjusted within +/- 0.3)
+    "hsv_v_range": 0.3,  # Brightness augmentation (randomly adjusted within +/- 0.3)
+    "fliplr": 0.5,  # Flip image left-right with a probability of 0.5
 }
-
 
 
 # --- 2. Function to Train YOLO Model ---
@@ -66,7 +65,7 @@ def train_yolo_model(
         if augmentations is None:
             hsv_h_range = 0
             hsv_s_range = 0
-            hsv_v_range = 0 
+            hsv_v_range = 0
             fliplr = 0
         else:
             hsv_h_range = augmentations.get("hsv_h_range", 0)
@@ -80,10 +79,10 @@ def train_yolo_model(
             imgsz=img_size,
             batch=batch_size,
             device=device,
-            freeze = FREEZE_LAYERS, # Freeze the first 10 layers
-            lr0  = LEARNING_RATE, 
-            plots = True, 
-            val = True,
+            freeze=FREEZE_LAYERS,  # Freeze the first 10 layers
+            lr0=LEARNING_RATE,
+            plots=True,
+            val=True,
             # --- ONLY HSV Augmentations ---
             hsv_h=hsv_h_range,  # Hue augmentation (randomly adjusted within +/- hsv_h_range)
             hsv_s=hsv_s_range,  # Saturation augmentation (randomly adjusted within +/- hsv_s_range)
@@ -99,7 +98,7 @@ def train_yolo_model(
             mosaic=0.0,  # Disable mosaic augmentation
             mixup=0.0,  # Disable mixup augmentation
             copy_paste=0.0,  # Disable copy-paste augmentation
-            project="ultralytics_yolo_project"+MLFLOW_EXPERIMENT_NAME,
+            project="ultralytics_yolo_project" + MLFLOW_EXPERIMENT_NAME,
             name="yolov11l_run",
             # auto_augment=None # Ensure auto_augment is not overriding
         )
@@ -114,7 +113,9 @@ def train_yolo_model(
                 local_file_path = os.path.join(root, file)
                 # Create a GCS destination path that maintains the folder structure
                 relative_path = os.path.relpath(local_file_path, save_dir)
-                gcs_path = os.path.join(destination_prefix, relative_path, MLFLOW_EXPERIMENT_NAME).replace(
+                gcs_path = os.path.join(
+                    destination_prefix, relative_path, MLFLOW_EXPERIMENT_NAME
+                ).replace(
                     "\\", "/"
                 )  # Use forward slashes
 
@@ -179,4 +180,3 @@ if __name__ == "__main__":
     # train model based on where the data is
     # model = train_with_data_in_cloud()
     model = train_with_data_locally("2025-10-09_len_14200")
-
