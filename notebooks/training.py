@@ -10,14 +10,13 @@ from utils import download_data_from_gcs, unzipDataset
 GCS_BUCKET_NAME = "open-cityvision"
 GCS_DATA_PATH = "."  # Path *within* your GCS bucket to the dataset root
 LOCAL_DATA_DIR = os.getcwd()  # the current directory where the data will be downloaded
-MLFLOW_EXPERIMENT_NAME = "_yolo_wo_augmentations"
-
+MLFLOW_EXPERIMENT_NAME = "_yolo_aug"
 
 # YOLO Model Configuration
 IMG_SIZE = 640
 BATCH_SIZE = 64
 DEVICE = 0
-EPOCHS = 100
+EPOCHS = 200
 FREEZE_LAYERS = 10
 LEARNING_RATE = 2e-4
 ML_FLOW_TRACKING = True
@@ -26,6 +25,7 @@ AUGMENTATION = {
     "hsv_s_range": 0.3,  # Saturation augmentation (randomly adjusted within +/- 0.3)
     "hsv_v_range": 0.3,  # Brightness augmentation (randomly adjusted within +/- 0.3)
     "fliplr": 0.5,  # Flip image left-right with a probability of 0.5
+    "degrees": 5,  # Image rotation
 }
 
 
@@ -67,11 +67,13 @@ def train_yolo_model(
             hsv_s_range = 0
             hsv_v_range = 0
             fliplr = 0
+            degrees = 0
         else:
             hsv_h_range = augmentations.get("hsv_h_range", 0)
             hsv_s_range = augmentations.get("hsv_s_range", 0)
             hsv_v_range = augmentations.get("hsv_v_range", 0)
             fliplr = augmentations.get("fliplr", 0)
+            degrees = augmentations.get("degrees", 0)
 
         results = model.train(
             data=data_yaml_path,
@@ -81,6 +83,8 @@ def train_yolo_model(
             device=device,
             freeze=FREEZE_LAYERS,  # Freeze the first 10 layers
             lr0=LEARNING_RATE,
+            dropout=0.2,
+            cos_lr=False,
             plots=True,
             val=True,
             # --- ONLY HSV Augmentations ---
@@ -89,7 +93,7 @@ def train_yolo_model(
             hsv_v=hsv_v_range,  # Brightness augmentation (randomly adjusted within +/- hsv_v_range)
             fliplr=fliplr,  # Flip image left-right
             # --- Disable Other Augmentations ---
-            degrees=0.0,  # Image rotation
+            degrees=degrees,  # Image rotation
             translate=0.0,  # Image translation
             scale=0.0,  # Image scaling
             shear=0.0,  # Image shearing
@@ -108,17 +112,24 @@ def train_yolo_model(
         print(f"Results saved to: {save_dir}")
         # write this directory to the console
         print(f"Results saving to console ...")
+        destination_prefix = "Models"
         for root, _, files in os.walk(save_dir):
             for file in files:
+                print(f"Uploading file: {file}")
                 local_file_path = os.path.join(root, file)
                 # Create a GCS destination path that maintains the folder structure
                 relative_path = os.path.relpath(local_file_path, save_dir)
+                folder = root.split("/")[-1]
                 gcs_path = os.path.join(
-                    destination_prefix, relative_path, MLFLOW_EXPERIMENT_NAME
+                    destination_prefix, folder, relative_path
                 ).replace(
                     "\\", "/"
                 )  # Use forward slashes
+                print(f"GCS Path: {gcs_path}")
+                from google.cloud import storage
 
+                storage_client = storage.Client()
+                bucket = storage_client.bucket("open-cityvision")
                 blob = bucket.blob(gcs_path)
                 blob.upload_from_filename(local_file_path)
 
@@ -170,6 +181,7 @@ def train_with_data_locally(dataset_location):
         batch_size=BATCH_SIZE,
         device=DEVICE,
         mlflow_tracking=ML_FLOW_TRACKING,
+        augmentations=augmentation,
     )
     return model
 
