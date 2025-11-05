@@ -41,14 +41,14 @@ import torch.distributed as dist
 GCS_BUCKET_NAME = "open-cityvision"
 GCS_DATA_PATH = "."  # Path *within* your GCS bucket to the dataset root
 LOCAL_DATA_DIR = os.getcwd()  # the current directory where the data will be downloaded
-MLFLOW_EXPERIMENT_NAME = "_weighted_loss_head"
+MLFLOW_EXPERIMENT_NAME = "_weighted_loss_H&N"
 
 # YOLO Model Configuration
 IMG_SIZE = 960
 BATCH_SIZE = 64
 DEVICE = 0
-EPOCHS = 200
-FREEZE_LAYERS = 22
+EPOCHS = 2
+FREEZE_LAYERS = 10
 LEARNING_RATE = 2e-3
 ML_FLOW_TRACKING = True
 REGULARIZATION_WEIGHT = 0.001
@@ -57,21 +57,17 @@ MODEL_TYPE = "yolo11n.pt"
 WORKERS = 4  # Number of data loading workers (0 means however many cores are available)
 OPTIMIZER = "Adam"  # setting optimizer ot Adam to make sure the lr is set correctly
 ALPHA_FOR_SAMPLER = 0.7
-LABEL_SMOOTHING_FACTOR = 0.1
-# AUGMENTATION = {
-#     "hsv_h_range": 0.015,  # Hue augmentation (randomly adjusted within +/- 0.015)
-#     "hsv_s_range": 0.3,  # Saturation augmentation (randomly adjusted within +/- 0.3)
-#     "hsv_v_range": 0.3,  # Brightness augmentation (randomly adjusted within +/- 0.3)
-#     "fliplr": 0.5,  # Flip image left-right with a probability of 0.5
-#     "degrees": 5,  # Image rotation
-# }
+LABEL_SMOOTHING_FACTOR = 0
 AUGMENTATION = {
+    "hsv_h_range": 0.015,  # Hue augmentation (randomly adjusted within +/- 0.015)
+    "hsv_s_range": 0.3,  # Saturation augmentation (randomly adjusted within +/- 0.3)
     "hsv_v_range": 0.3,  # Brightness augmentation (randomly adjusted within +/- 0.3)
+    "fliplr": 0.5,  # Flip image left-right with a probability of 0.5
+    "degrees": 5,  # Image rotation
 }
 
-CLASS_WEIGHTS = None
+CLASS_WEIGHTS = True # Make this to None to disable class weights
 
-#  Handing Class Imbalance via Weighted Sampling 
 def make_image_weights(dataset, alpha=0.7):
     """
     Builds per-image weights from class frequencies.
@@ -113,8 +109,14 @@ def make_image_weights(dataset, alpha=0.7):
     img_w /= (img_w.mean() + 1e-12)
     return torch.DoubleTensor(img_w)
 
-# Augmentation taper after 70% of epochs 
 def taper_augmentations(trainer, start_ratio=0.70):
+    """
+    Tapers the augmentation strength during training.
+    Args:
+        trainer: The training object containing epoch and hyp attributes.
+        start_ratio: The ratio of epochs after which to start tapering.
+    
+    """
     r = trainer.epoch / max(1, trainer.epochs)
     if r >= start_ratio:
         H = trainer.hyp  # training hyper-params dict
@@ -123,16 +125,14 @@ def taper_augmentations(trainer, start_ratio=0.70):
             if H.get(k, 0) > 0:
                 H[k] = 0.0
 
-# Callback for tapering aug
-
 def on_train_epoch_start(trainer):
+    """Callback to taper augmentations at the start of each training epoch."""
     taper_augmentations(trainer, start_ratio=0.70)
 
 callbacks = {
     "on_train_epoch_start": on_train_epoch_start,
 }
 
-# Re-use the class counting logic from make_image_weights
 def get_class_counts(dataset):
     """
     Calculates the total instance count for each class across the dataset.
@@ -156,42 +156,32 @@ def get_class_counts(dataset):
                 
     return cls_counts # Returns a numpy array of [count_c0, count_c1, ...]
 
-# --- 2. Calculate Inverse-Frequency Loss Weights ---
 
-def calculate_inverse_frequency_weights(cls_counts, total_classes):
+def calculate_inverse_frequency_weights(cls_counts):
     """
-    Calculates inverse-frequency weights for the loss function.
-    Weight[i] = max_instances / count[i]  (or a simpler inverse: 1 / count[i])
-    A common formula is: total_instances / (count[i] * total_classes)
+    Calculates inverse-frequency weights for the loss function. Simple inverse frequency.
+
     """
     cls_counts = np.maximum(cls_counts, 1)  # Avoid division by zero
     total_instances = np.sum(cls_counts)
-    
-    # Using the standard inverse frequency: Weight = 1.0 / Frequency
-    # Weights are often normalized, but unnormalized works fine too.
-    # Inverse Frequency: gives higher weight to rare classes
-    inv_freq = 1.0 / cls_counts
-    
-    # Normalizing by the max weight (optional, but often good practice)
-    max_weight = np.max(inv_freq)
-    
-    # Scale all weights so the largest weight is 1.0, or scale to make them smaller
-    # Let's use the simplest, non-normalized inverse for maximum impact on rare classes:
-    # Scale by a factor if the weights are too large:
-    scale_factor = 1.0 / np.mean(inv_freq)
-    
-    weights = inv_freq * scale_factor # Simple mean normalization
-    
-    # Convert to a list of floats
+
+    weights = 1.0 / cls_counts
+
     return weights.tolist()
-# --- 1. Custom Smooth BCE Loss Function ---
 
 class SmoothBCEWithLogitsLoss(nn.BCEWithLogitsLoss):
     """
-    A custom BCE loss that implements label smoothing by modifying the target tensor.
+    A custom BCE loss that implements label smoothing by modifying the target tensor. It also supports class-wise loss weighting.
     Inherits from PyTorch's standard BCE with logits loss.
     """
     def __init__(self, smooth_alpha=0.0, class_weights=None, **kwargs):
+        """
+        Initializes the SmoothBCEWithLogitsLoss.
+        Args:
+            smooth_alpha (float): Smoothing factor in [0, 1]. 0 means no smoothing.
+            class_weights (list or tensor): Class-wise weights for the loss. Shape [C].
+            **kwargs: Additional keyword arguments for nn.BCEWithLogitsLoss.
+        """
         super().__init__(**kwargs)
         self.smooth_alpha = smooth_alpha
         self.reduction = self.reduction # inherit reduction method
@@ -199,7 +189,11 @@ class SmoothBCEWithLogitsLoss(nn.BCEWithLogitsLoss):
             self.register_buffer("class_weights", torch.tensor(class_weights, dtype=torch.float32))
         else:
             self.class_weights = None
+        print(f"SmoothBCEWithLogitsLoss initialized with smooth_alpha={smooth_alpha} and class_weights={class_weights}")
     def forward(self, input, target):
+        """
+        Forward pass for the loss computation.
+        """
         if self.smooth_alpha > 0:
             # target is the hard label tensor (0 or 1)
             
@@ -219,6 +213,8 @@ class SmoothBCEWithLogitsLoss(nn.BCEWithLogitsLoss):
             # Standard BCEWithLogitsLoss does not accept a weight for reduction='none'.
             # We must apply the weight manually after the loss is calculated.
             raw_loss = super().forward(input, target) # This returns a loss tensor of shape [N, C]
+            print("raw_loss shape:", raw_loss.shape)
+            print("weights_per_anchor shape:", weights_per_anchor.shape)
             
             # Manual weighted loss: Multiply the loss by the class weight tensor
             # The multiplication broadcasts correctly: [N, C] * [1, C] = [N, C]
@@ -227,22 +223,17 @@ class SmoothBCEWithLogitsLoss(nn.BCEWithLogitsLoss):
         # Calculate loss using the smoothed targets
         return super().forward(input, target)
 
-# --- 2. Custom Detection Loss (Injects Smoothing) ---
 
 class CustomDetectionLoss(v8DetectionLoss):
     """
-    A custom detection loss that incorporates label smoothing into the classification loss.
+    A custom detection loss that incorporates label smoothing and weighted loss into the classification loss.
     Inherits from the standard v8DetectionLoss.
     """
     
     def __init__(self, model, class_weights=None):
         super().__init__(model)
         
-        # Inject Custom Loss and Initialize Logging Tensors
-        self.bce = SmoothBCEWithLogitsLoss(
-            smooth_alpha=LABEL_SMOOTHING_FACTOR, 
-            reduction='none' # Must be 'none' to keep the loss tensor [N, C]
-        )
+        
         m = model.model[-1]  # Get the Detect() module instance
         self.nc = 9    
         self.cls_loss_log = torch.zeros(self.nc, device=self.device)
@@ -251,12 +242,17 @@ class CustomDetectionLoss(v8DetectionLoss):
         print(f"[CustomLoss] Manual Label Smoothing Activated (Alpha: {LABEL_SMOOTHING_FACTOR})")
         print(f"[CustomLoss] Class-Wise Loss Weighting {weight_status}.")
         print(f"[CustomLoss] Class-Wise Loss Logging Enabled for {self.nc} classes.")
-
+        # Inject Custom Loss and Initialize Logging Tensors
+        self.bce = SmoothBCEWithLogitsLoss(
+            smooth_alpha=LABEL_SMOOTHING_FACTOR,
+            class_weights=class_weights, 
+            reduction='none' # Must be 'none' to keep the loss tensor [N, C]
+        )
 
     def __call__(self, preds: Any, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
         """Calculate the sum of the loss for box, cls and dfl, and log class-wise loss."""
         
-        # --- 1. Original Setup and Assignment (Copied from base __call__) ---
+        # Original Setup and Assignment-  same as base class
         loss = torch.zeros(3, device=self.device)  # box, cls, dfl
         feats = preds[1] if isinstance(preds, tuple) else preds
         pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
@@ -293,16 +289,15 @@ class CustomDetectionLoss(v8DetectionLoss):
 
         target_scores_sum = max(target_scores.sum(), 1)
         
-        # --- 2. Classification Loss (MODIFIED) ---
+        # Classification Loss
 
-        # 2a. Calculate classification loss for all samples/classes (tensor of shape [N_anchors, N_classes])
+        # Calculate classification loss for all samples/classes (tensor of shape [N_anchors, N_classes])
         cls_losses = self.bce(pred_scores, target_scores.to(dtype))
         
-        # Get ground truth classes for positive samples (fg_mask is applied later)
-        # target_labels is not always available, but target_scores is one-hot/smooth-one-hot:
+        # Get ground truth classes for positive samples 
         gt_classes = target_scores[fg_mask].argmax(dim=1) # [N_positive]
         
-        # 2b. Accumulate Class-Wise Loss (for logging)
+        # Accumulate Class-Wise Loss (for logging)
         if fg_mask.sum():
             # Filter the loss tensor to only positive samples
             cls_losses_pos = cls_losses[fg_mask] # [N_positive, N_classes]
@@ -315,8 +310,8 @@ class CustomDetectionLoss(v8DetectionLoss):
                     class_loss_i = cls_losses_pos[class_mask, i].sum()
                     self.cls_loss_log[i] += class_loss_i.detach()
                     self.cls_counts_log[i] += class_mask.sum().detach()
-        
-        # 2c. Original Aggregation (for backprop)
+
+        # Original Aggregation (for backprop)
         # The total CLS loss for backprop is the sum of losses *only for the positive class* # for all positive samples (normalized later).
         if fg_mask.sum():
              # Get the loss only for the assigned (true) class for each positive sample
@@ -325,7 +320,7 @@ class CustomDetectionLoss(v8DetectionLoss):
         else:
              loss[1] = torch.zeros(1, device=self.device)
             
-        # --- 3. Bbox and DFL Loss (Rest of the original __call__) ---
+        # Bbox and DFL Loss (Rest of the original __call__)
         if fg_mask.sum():
             loss[0], loss[2] = self.bbox_loss(
                 pred_distri,
@@ -341,7 +336,7 @@ class CustomDetectionLoss(v8DetectionLoss):
         loss[1] *= self.hyp.cls
         loss[2] *= self.hyp.dfl
         
-        # --- 4. Final Return and Logging Cleanup (MODIFIED) ---
+        # Final Return and Logging Cleanup
 
         # Normalize the class-wise loss for logging (mean loss per sample for that class)
         non_zero_counts = torch.where(self.cls_counts_log > 0, self.cls_counts_log, torch.ones_like(self.cls_counts_log))
@@ -354,12 +349,9 @@ class CustomDetectionLoss(v8DetectionLoss):
         # This list of metrics is what the Trainer will log
         loss_items = main_loss_items + mean_cls_loss_per_class
 
-        
         # Reset accumulators for the next batch
         self.cls_loss_log = torch.zeros(self.nc, device=self.device)
         self.cls_counts_log = torch.zeros(self.nc, device=self.device)
-
-        print("Loss items (box, cls, dfl + class-wise):", loss_items)
 
         # Return the scaled loss for backprop and the loss items for logging
         return loss.sum() * batch_size, torch.tensor(loss_items, device=self.device)
@@ -383,14 +375,7 @@ class CustomWeightedTrainer(DetectionTrainer):
             except Exception as e:
                 print(f"Warning: Failed to pre-load model object using YOLO constructor: {e}")
         # Replace the default loss function with the custom one
-        # class weights passed if not None
-        global CLASS_WEIGHTS
-        if CLASS_WEIGHTS is not None:
-            print("✅ Using Class Weights in CustomWeightedTrainer.")
-            train_dataset = self.train_loader.dataset 
-            cls_counts = get_class_counts(train_dataset)
-            CLASS_WEIGHTS = calculate_inverse_frequency_weights(cls_counts, len(train_dataset.data["names"]))
-        self.loss = CustomDetectionLoss(self.model, class_weights=CLASS_WEIGHTS)
+        
 
     def get_dataloader(self, dataset_path: str, batch_size: int = 16, rank: int = 0, mode: str = "train"):
         """
@@ -458,6 +443,13 @@ class CustomWeightedTrainer(DetectionTrainer):
         # This method handles model compilation, freezing, DDP setup, dataloader creation,
         # and most importantly, sets self.loss_names to ('box_loss', 'cls_loss', 'dfl_loss').
         super()._setup_train() 
+        global CLASS_WEIGHTS
+        if CLASS_WEIGHTS is not None:
+            print("✅ Using Class Weights in CustomWeightedTrainer.")
+            train_dataset = self.train_loader.dataset 
+            cls_counts = get_class_counts(train_dataset)
+            CLASS_WEIGHTS = calculate_inverse_frequency_weights(cls_counts)
+        self.loss = CustomDetectionLoss(self.model, class_weights=CLASS_WEIGHTS)
         
         # 2. Add the custom class-wise loss names
         nc = self.loss.nc # Get the corrected class count (9) from your custom loss module
@@ -657,14 +649,30 @@ def train_yolo_model(
         )
         exit(1)
     return results
+def get_classwise_results(model_path: str):
+    """
+    This function loads a trained YOLO model and retrieves class-wise precision results and prints them.
+    Args:
+        model_path (str): Path to the trained YOLO model file (e.g., best.pt).
+    Returns:
+        None
+    """
+    model = YOLO(model_path)
+    results = model.val()
+    # The class names are stored in the model object
+    class_names = results.names 
 
+    # Access the list of dictionaries containing per-class metrics
+    class_metrics = results.box.class_result
+
+    
 def train_with_data_in_cloud():
     """
     This function downloads data from GCS, unzips it, and trains the YOLO model.
     Returns:
         model (YOLO): Trained YOLO model instance.
     """
-
+    
     # 1. Download data from GCS
     download_data_from_gcs(GCS_BUCKET_NAME, GCS_DATA_PATH, LOCAL_DATA_DIR)
     # 2. Unzip the downloaded files
@@ -712,8 +720,10 @@ def train_with_data_locally(dataset_location):
 
 # --- Main Execution Flow ---
 if __name__ == "__main__":
-    print("Starting the training script...")
+    # print("Starting the training script...")
     # train model based on where the data is
     # model = train_with_data_in_cloud()
     model = train_with_data_locally("2025-10-09_len_14200")
-    
+    # path = r"ultralytics_yolo_project_Label_smoothing_head/yolov11n_run2/weights/best.pt"
+    # get_classwise_results(path)
+
