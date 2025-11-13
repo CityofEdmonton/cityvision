@@ -1,6 +1,7 @@
 # Import necessary libraries
 from ultralytics import YOLO
 import os
+import sys
 from typing import Union, Tuple
 from ultralytics import settings
 from utils import download_data_from_gcs, unzipDataset
@@ -252,6 +253,7 @@ class CustomDetectionLoss(v8DetectionLoss):
         self.nc = 9    
         self.cls_loss_log = torch.zeros(self.nc, device=self.device)
         self.cls_counts_log = torch.zeros(self.nc, device=self.device)
+        self._call_count = 0  # Counter to limit print frequency
         weight_status = "Enabled" if class_weights is not None else "Disabled"
         print(f"[CustomLoss] Manual Label Smoothing Activated (Alpha: {LABEL_SMOOTHING_FACTOR})")
         print(f"[CustomLoss] Class-Wise Loss Weighting {weight_status}.")
@@ -265,6 +267,16 @@ class CustomDetectionLoss(v8DetectionLoss):
 
     def __call__(self, preds: Any, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
         """Calculate the sum of the loss for box, cls and dfl, and log class-wise loss."""
+        
+        # Increment call counter
+        self._call_count += 1
+        
+        # Debug print - only on main process, with explicit flushing, and limit frequency
+        if RANK in {-1, 0}:
+            # Print on first call and every 100 calls
+            if self._call_count == 1 or self._call_count % 100 == 0:
+                print(f"[CustomDetectionLoss.__call__] Loss function called! Call #{self._call_count}, RANK={RANK}", flush=True)
+                sys.stdout.flush()
         
         # Original Setup and Assignment-  same as base class
         loss = torch.zeros(3, device=self.device)  # box, cls, dfl
@@ -307,6 +319,11 @@ class CustomDetectionLoss(v8DetectionLoss):
 
         # Calculate classification loss for all samples/classes (tensor of shape [N_anchors, N_classes])
         cls_losses = self.bce(pred_scores, target_scores.to(dtype))
+        
+        # Debug print for weighted loss calculation
+        if RANK in {-1, 0} and (self._call_count == 1 or self._call_count % 100 == 0):
+            print(f"[CustomDetectionLoss.__call__] Calculated cls_losses shape: {cls_losses.shape}, fg_mask sum: {fg_mask.sum().item()}", flush=True)
+            sys.stdout.flush()
         
         # Get ground truth classes for positive samples 
         gt_classes = target_scores[fg_mask].argmax(dim=1) # [N_positive]
@@ -366,6 +383,11 @@ class CustomDetectionLoss(v8DetectionLoss):
         # Reset accumulators for the next batch
         self.cls_loss_log = torch.zeros(self.nc, device=self.device)
         self.cls_counts_log = torch.zeros(self.nc, device=self.device)
+
+        # Debug print for final loss values
+        if RANK in {-1, 0} and (self._call_count == 1 or self._call_count % 100 == 0):
+            print(f"[CustomDetectionLoss.__call__] Final losses - box: {loss[0].item():.4f}, cls: {loss[1].item():.4f}, dfl: {loss[2].item():.4f}, total: {loss.sum().item() * batch_size:.4f}", flush=True)
+            sys.stdout.flush()
 
         # Return the scaled loss for backprop and the loss items for logging
         return loss.sum() * batch_size, torch.tensor(loss_items, device=self.device)
