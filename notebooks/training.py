@@ -244,6 +244,9 @@ class CustomDetectionLoss(v8DetectionLoss):
     A custom detection loss that incorporates label smoothing and weighted loss into the classification loss.
     Inherits from the standard v8DetectionLoss.
     """
+    # Unique identifier to verify this custom loss is being used
+    IS_CUSTOM_LOSS = True
+    CUSTOM_LOSS_VERSION = "1.0.0"
     
     def __init__(self, model, class_weights=None):
         super().__init__(model)
@@ -255,9 +258,22 @@ class CustomDetectionLoss(v8DetectionLoss):
         self.cls_counts_log = torch.zeros(self.nc, device=self.device)
         self._call_count = 0  # Counter to limit print frequency
         weight_status = "Enabled" if class_weights is not None else "Disabled"
-        print(f"[CustomLoss] Manual Label Smoothing Activated (Alpha: {LABEL_SMOOTHING_FACTOR})")
-        print(f"[CustomLoss] Class-Wise Loss Weighting {weight_status}.")
-        print(f"[CustomLoss] Class-Wise Loss Logging Enabled for {self.nc} classes.")
+        
+        # Verification prints - these should ALWAYS show up
+        if RANK in {-1, 0}:
+            print("=" * 80, flush=True)
+            print(f"[CustomDetectionLoss.__init__] ✅ CUSTOM LOSS INITIALIZED!", flush=True)
+            print(f"[CustomDetectionLoss.__init__] Loss Type: {type(self).__name__}", flush=True)
+            print(f"[CustomDetectionLoss.__init__] Is Custom Loss: {self.IS_CUSTOM_LOSS}", flush=True)
+            print(f"[CustomDetectionLoss.__init__] Version: {self.CUSTOM_LOSS_VERSION}", flush=True)
+            print(f"[CustomDetectionLoss.__init__] Manual Label Smoothing Activated (Alpha: {LABEL_SMOOTHING_FACTOR})", flush=True)
+            print(f"[CustomDetectionLoss.__init__] Class-Wise Loss Weighting {weight_status}.", flush=True)
+            print(f"[CustomDetectionLoss.__init__] Class-Wise Loss Logging Enabled for {self.nc} classes.", flush=True)
+            if class_weights is not None:
+                print(f"[CustomDetectionLoss.__init__] Class Weights: {class_weights}", flush=True)
+            print("=" * 80, flush=True)
+            sys.stdout.flush()
+        
         # Inject Custom Loss and Initialize Logging Tensors
         self.bce = SmoothBCEWithLogitsLoss(
             smooth_alpha=LABEL_SMOOTHING_FACTOR,
@@ -487,6 +503,21 @@ class CustomWeightedTrainer(DetectionTrainer):
             CLASS_WEIGHTS = calculate_inverse_frequency_weights(cls_counts)
         self.loss = CustomDetectionLoss(self.model, class_weights=CLASS_WEIGHTS)
         
+        # VERIFICATION: Check that custom loss is actually being used
+        if RANK in {-1, 0}:
+            print("=" * 80, flush=True)
+            print("[_setup_train] 🔍 VERIFYING CUSTOM LOSS IS BEING USED...", flush=True)
+            print(f"[_setup_train] Loss object type: {type(self.loss).__name__}", flush=True)
+            print(f"[_setup_train] Is instance of CustomDetectionLoss: {isinstance(self.loss, CustomDetectionLoss)}", flush=True)
+            print(f"[_setup_train] Is instance of v8DetectionLoss: {isinstance(self.loss, v8DetectionLoss)}", flush=True)
+            if hasattr(self.loss, 'IS_CUSTOM_LOSS'):
+                print(f"[_setup_train] ✅ IS_CUSTOM_LOSS flag: {self.loss.IS_CUSTOM_LOSS}", flush=True)
+                print(f"[_setup_train] ✅ Custom Loss Version: {self.loss.CUSTOM_LOSS_VERSION}", flush=True)
+            else:
+                print("[_setup_train] ❌ WARNING: IS_CUSTOM_LOSS flag NOT FOUND! Custom loss may not be used!", flush=True)
+            print("=" * 80, flush=True)
+            sys.stdout.flush()
+        
         # 2. Add the custom class-wise loss names
         nc = self.loss.nc # Get the corrected class count (9) from your custom loss module
         
@@ -506,7 +537,17 @@ class CustomWeightedTrainer(DetectionTrainer):
         if self.validator:
             self.validator.loss_names = self.loss_names
 
-        print(f"✅ Trainer Logging: Updated loss_names to include {nc} custom class-wise losses.")
+        # VERIFICATION: Check that custom loss names are present
+        if RANK in {-1, 0}:
+            print(f"✅ Trainer Logging: Updated loss_names to include {nc} custom class-wise losses.")
+            print(f"[_setup_train] Total loss names: {len(self.loss_names)}", flush=True)
+            print(f"[_setup_train] Loss names: {self.loss_names}", flush=True)
+            has_custom_losses = any('cls_loss_C' in name for name in self.loss_names)
+            if has_custom_losses:
+                print(f"[_setup_train] ✅ VERIFIED: Custom class-wise loss names found in loss_names!", flush=True)
+            else:
+                print(f"[_setup_train] ❌ WARNING: Custom class-wise loss names NOT found in loss_names!", flush=True)
+            sys.stdout.flush()
 
 
     # def label_loss_items(self, loss_items=None, prefix="train"):
@@ -560,6 +601,65 @@ class CustomWeightedTrainer(DetectionTrainer):
 
     #     # The BaseTrainer handles the 'train/' or 'val/' prefix for the keys
     #     return all_losses_dict
+
+def verify_custom_loss_is_used(trainer):
+    """
+    Helper function to verify that the custom loss is being used in training.
+    
+    Args:
+        trainer: The CustomWeightedTrainer instance (or any trainer with a loss attribute)
+    
+    Returns:
+        dict: Dictionary with verification results
+    """
+    results = {
+        'is_custom_loss': False,
+        'loss_type': None,
+        'has_custom_flag': False,
+        'has_custom_loss_names': False,
+        'loss_names_count': 0,
+        'verification_passed': False
+    }
+    
+    if not hasattr(trainer, 'loss'):
+        print("❌ VERIFICATION FAILED: Trainer has no 'loss' attribute!", flush=True)
+        return results
+    
+    loss = trainer.loss
+    results['loss_type'] = type(loss).__name__
+    results['is_custom_loss'] = isinstance(loss, CustomDetectionLoss)
+    
+    if hasattr(loss, 'IS_CUSTOM_LOSS'):
+        results['has_custom_flag'] = True
+        results['is_custom_loss'] = loss.IS_CUSTOM_LOSS
+    
+    if hasattr(trainer, 'loss_names'):
+        results['loss_names_count'] = len(trainer.loss_names)
+        results['has_custom_loss_names'] = any('cls_loss_C' in name for name in trainer.loss_names)
+    
+    results['verification_passed'] = (
+        results['is_custom_loss'] and 
+        results['has_custom_flag'] and 
+        results['has_custom_loss_names']
+    )
+    
+    # Print verification results
+    print("=" * 80, flush=True)
+    print("🔍 CUSTOM LOSS VERIFICATION RESULTS", flush=True)
+    print("=" * 80, flush=True)
+    print(f"Loss Type: {results['loss_type']}", flush=True)
+    print(f"Is CustomDetectionLoss instance: {results['is_custom_loss']}", flush=True)
+    print(f"Has IS_CUSTOM_LOSS flag: {results['has_custom_flag']}", flush=True)
+    print(f"Has custom loss names (cls_loss_C*): {results['has_custom_loss_names']}", flush=True)
+    print(f"Total loss names: {results['loss_names_count']}", flush=True)
+    if results['verification_passed']:
+        print("✅ VERIFICATION PASSED: Custom loss is being used!", flush=True)
+    else:
+        print("❌ VERIFICATION FAILED: Custom loss may not be properly configured!", flush=True)
+    print("=" * 80, flush=True)
+    sys.stdout.flush()
+    
+    return results
 
 def train_yolo_model(
     data_yaml_path: str,
@@ -621,7 +721,17 @@ def train_yolo_model(
         model.trainer = CustomWeightedTrainer(overrides=model.overrides)
         for i in callbacks:
             model.add_callback(i, callbacks[i])
+        
+        # Note: Loss verification will happen automatically in _setup_train() when training starts
+        # The verification prints will show up when _setup_train() is called
+        print("\n--- Starting Training (Custom Loss Verification will occur during setup) ---", flush=True)
+        sys.stdout.flush()
+        
         results = model.trainer.train()
+        
+        # Verify custom loss after training (loss should be set up by now)
+        if hasattr(model.trainer, 'loss'):
+            verify_custom_loss_is_used(model.trainer)
         
         print("\n--- Training Complete! ---")
         save_dir = model.trainer.save_dir  # Directory where results are saved
@@ -728,6 +838,50 @@ def train_with_data_locally(dataset_location):
         callbacks=callbacks,
     )
     return model
+
+def test_custom_loss_instantiation():
+    """
+    Simple test function to verify that CustomDetectionLoss can be instantiated correctly.
+    This can be called independently to test the loss function.
+    """
+    print("\n" + "=" * 80)
+    print("🧪 TESTING CUSTOM LOSS INSTANTIATION")
+    print("=" * 80)
+    
+    try:
+        # Create a minimal model to test with
+        model = YOLO(MODEL_TYPE)
+        
+        # Try to instantiate the custom loss
+        print("Creating CustomDetectionLoss instance...", flush=True)
+        custom_loss = CustomDetectionLoss(model.model, class_weights=None)
+        
+        # Verify the loss
+        print("\nVerifying loss properties...", flush=True)
+        assert isinstance(custom_loss, CustomDetectionLoss), "Loss is not CustomDetectionLoss instance!"
+        assert hasattr(custom_loss, 'IS_CUSTOM_LOSS'), "IS_CUSTOM_LOSS flag not found!"
+        assert custom_loss.IS_CUSTOM_LOSS == True, "IS_CUSTOM_LOSS flag is not True!"
+        assert hasattr(custom_loss, 'CUSTOM_LOSS_VERSION'), "CUSTOM_LOSS_VERSION not found!"
+        assert hasattr(custom_loss, 'bce'), "BCE loss not found!"
+        assert isinstance(custom_loss.bce, SmoothBCEWithLogitsLoss), "BCE is not SmoothBCEWithLogitsLoss!"
+        
+        print("\n✅ ALL TESTS PASSED: Custom loss is working correctly!", flush=True)
+        print(f"   - Loss type: {type(custom_loss).__name__}", flush=True)
+        print(f"   - IS_CUSTOM_LOSS: {custom_loss.IS_CUSTOM_LOSS}", flush=True)
+        print(f"   - Version: {custom_loss.CUSTOM_LOSS_VERSION}", flush=True)
+        print(f"   - Number of classes: {custom_loss.nc}", flush=True)
+        print("=" * 80 + "\n", flush=True)
+        sys.stdout.flush()
+        
+        return True
+        
+    except Exception as e:
+        print(f"\n❌ TEST FAILED: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        print("=" * 80 + "\n", flush=True)
+        sys.stdout.flush()
+        return False
 
 # --- Main Execution Flow ---
 if __name__ == "__main__":
