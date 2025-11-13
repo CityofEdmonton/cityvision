@@ -9,8 +9,8 @@ from ultralytics.data.build import InfiniteDataLoader, build_dataloader
 from ultralytics.utils import DEFAULT_CFG
 from torch.utils.data import WeightedRandomSampler
 from ultralytics.utils.torch_utils import torch_distributed_zero_first
-import numpy as np
 import torch.nn as nn
+import numpy as np
 import torch
 from ultralytics.utils.loss import v8DetectionLoss
 from ultralytics.utils.tal import  make_anchors
@@ -28,45 +28,53 @@ from ultralytics.utils import (
     colorstr,
     emojis,
 )
-from ultralytics.utils.dist import ddp_cleanup, generate_ddp_command
-import subprocess
-import time
-import warnings
-import math
-from torch.cuda.amp import autocast
-import torch.distributed as dist
-
-
+print(f"DEBUG CHECK: Initial RANK={RANK}, LOCAL_RANK={LOCAL_RANK}")
 # --- Configuration ---
 GCS_BUCKET_NAME = "open-cityvision"
 GCS_DATA_PATH = "."  # Path *within* your GCS bucket to the dataset root
 LOCAL_DATA_DIR = os.getcwd()  # the current directory where the data will be downloaded
-MLFLOW_EXPERIMENT_NAME = "_weighted_loss_H&N"
+MLFLOW_EXPERIMENT_NAME = "nano12Nov"
 
 # YOLO Model Configuration
-IMG_SIZE = 960
-BATCH_SIZE = 64
+IMG_SIZE = 640
+BATCH_SIZE = 128
 DEVICE = 0
-EPOCHS = 2
+EPOCHS = 700
 FREEZE_LAYERS = 10
-LEARNING_RATE = 2e-3
+LEARNING_RATE = 0.00002
+COSLR = False
 ML_FLOW_TRACKING = True
 REGULARIZATION_WEIGHT = 0.001
-DROPOUT = 0.2
+DROPOUT = 0.1
 MODEL_TYPE = "yolo11n.pt"
-WORKERS = 4  # Number of data loading workers (0 means however many cores are available)
+WORKERS = 0  # Number of data loading workers (0 means however many cores are available)
 OPTIMIZER = "Adam"  # setting optimizer ot Adam to make sure the lr is set correctly
 ALPHA_FOR_SAMPLER = 0.7
-LABEL_SMOOTHING_FACTOR = 0
+LABEL_SMOOTHING_FACTOR = 0 # Set to 0 to disable label smoothing, or a value in [0, 1] to enable
+PATIENCE = 400
 AUGMENTATION = {
-    "hsv_h_range": 0.015,  # Hue augmentation (randomly adjusted within +/- 0.015)
-    "hsv_s_range": 0.3,  # Saturation augmentation (randomly adjusted within +/- 0.3)
-    "hsv_v_range": 0.3,  # Brightness augmentation (randomly adjusted within +/- 0.3)
-    "fliplr": 0.5,  # Flip image left-right with a probability of 0.5
-    "degrees": 5,  # Image rotation
+    # --- Photometric (HSV) Augmentations ---
+    "hsv_h": 0.015,         # Hue augmentation (+/- 0.015)
+    "hsv_s": 0.7,           # Saturation augmentation (+/- 0.7)
+    "hsv_v": 0.6,           # Brightness/Value augmentation (+/- 0.4)
+
+    # --- Geometric Augmentations (Requires BBox Transformation) ---
+    "degrees": 180.0,       # Image rotation (+/- degrees). Set to 1.0 - 5.0 if needed.
+    "translate": 0.3,       # Image translation (+/- fraction of image size)
+    "scale": 0.5,           # Image scaling (zoom out 0.5x to zoom in 1.5x)
+    "shear": 5,           # Image shear (+/- degrees). Set to 1.0 - 5.0 if needed.
+    "perspective": 0.0001	,     # Perspective transform (random fraction). Set to 0.001 if needed.
+    "flipud": 1,          # Flip image Up-Down (Probability). Set to 0.1 for general tasks.
+    "fliplr": 1,          # Flip image Left-Right (Probability)
+    # "bgr": 0.5,             # Convert image to BGR color space (Probability)
+    # --- Compositional Augmentations (Often applied together) ---
+    # "mosaic": 0.5,          # Combine 4 images into 1 (Probability)
+    # "mixup": 0.3,           # Blend 2 images and labels (Probability)
+    "cutmix": 1,          # Cut a patch from one image and paste to another (Probability)
+    "copy_paste": 1,      #see mixupo# Copy objects from one image and paste to another (Probability)
 }
 
-CLASS_WEIGHTS = True # Make this to None to disable class weights
+CLASS_WEIGHTS = False # Make this to None to disable class weights
 
 def make_image_weights(dataset, alpha=0.7):
     """
@@ -121,13 +129,13 @@ def taper_augmentations(trainer, start_ratio=0.70):
     if r >= start_ratio:
         H = trainer.hyp  # training hyper-params dict
         # zero out strong regs to let model fit real distribution
-        for k in ("hsv_h_range", "hsv_s_range", "hsv_v_range","degrees", "fliplr"):
+        for k in AUGMENTATION.keys():
             if H.get(k, 0) > 0:
                 H[k] = 0.0
 
 def on_train_epoch_start(trainer):
     """Callback to taper augmentations at the start of each training epoch."""
-    taper_augmentations(trainer, start_ratio=0.70)
+    taper_augmentations(trainer, start_ratio=0.90)
 
 callbacks = {
     "on_train_epoch_start": on_train_epoch_start,
@@ -195,6 +203,8 @@ class SmoothBCEWithLogitsLoss(nn.BCEWithLogitsLoss):
         Forward pass for the loss computation.
         """
         if self.smooth_alpha > 0:
+            if RANK in {-1, 0}:
+                print(f"Applying label smoothing with alpha={self.smooth_alpha}")
             # target is the hard label tensor (0 or 1)
             
             target_smoothed = target.clone()
@@ -208,13 +218,17 @@ class SmoothBCEWithLogitsLoss(nn.BCEWithLogitsLoss):
             
             target = target_smoothed.to(input.dtype)
         if self.class_weights is not None:
+            if RANK in {0,-1}:
+                print(f"Rank 0: Applying class weights: {self.class_weights}")
             weights_per_anchor = self.class_weights.to(input.device).view(1, -1) # Shape [1, C]
             
             # Standard BCEWithLogitsLoss does not accept a weight for reduction='none'.
             # We must apply the weight manually after the loss is calculated.
             raw_loss = super().forward(input, target) # This returns a loss tensor of shape [N, C]
-            print("raw_loss shape:", raw_loss.shape)
-            print("weights_per_anchor shape:", weights_per_anchor.shape)
+            if RANK in {-1, 0}:
+                # These two print statements will now only execute and print on the main process
+                print(f"[Rank 0 Debug] raw_loss shape: {raw_loss.shape}")
+                print(f"[Rank 0 Debug] weights_per_anchor shape: {weights_per_anchor.shape}")
             
             # Manual weighted loss: Multiply the loss by the class weight tensor
             # The multiplication broadcasts correctly: [N, C] * [1, C] = [N, C]
@@ -534,6 +548,7 @@ def train_yolo_model(
     device: str,
     mlflow_tracking: bool = False,
     augmentations: dict = None,
+    albumentations_transforms: Any = None,
     callbacks: dict = callbacks,
 ) -> None:
     """
@@ -557,19 +572,6 @@ def train_yolo_model(
 
         else:
             print("MLflow logging is disabled. Training will not log to MLflow.")
-        # Train the model
-        if augmentations is None:
-            hsv_h_range = 0
-            hsv_s_range = 0
-            hsv_v_range = 0
-            fliplr = 0
-            degrees = 0
-        else:
-            hsv_h_range = augmentations.get("hsv_h_range", 0)
-            hsv_s_range = augmentations.get("hsv_s_range", 0)
-            hsv_v_range = augmentations.get("hsv_v_range", 0)
-            fliplr = augmentations.get("fliplr", 0)
-            degrees = augmentations.get("degrees", 0)
         # Manually create the overrides dictionary using all your custom arguments
         custom_overrides = {
             'data': data_yaml_path,
@@ -583,27 +585,15 @@ def train_yolo_model(
             'weight_decay': REGULARIZATION_WEIGHT,
             'workers': WORKERS,
             'optimizer': OPTIMIZER,
-            'hsv_v': augmentations.get("hsv_v_range", 0),
-            'hsv_s': augmentations.get("hsv_s_range", 0),
-            'hsv_h': augmentations.get("hsv_h_range", 0),
-            'fliplr': augmentations.get("fliplr", 0),
-            'degrees': augmentations.get("degrees", 0),
             'val': True,
-            'cos_lr': True,
+            'cos_lr': COSLR,
             'plots': True,
-            # Disable other augmentations
-            'translate': 0.0,
-            'scale': 0.0,
-            'shear': 0.0,
-            'perspective': 0.0,
-            'flipud': 0.0,
-            'mosaic': 0.0,
-            'mixup': 0.0,
-            'copy_paste': 0.0,
-            
             'project': "ultralytics_yolo_project" + MLFLOW_EXPERIMENT_NAME,
             'name': "yolov11n_run",
+            'patience': PATIENCE,
         }
+        if augmentations:
+            custom_overrides.update(augmentations)
 
         model.overrides.update(custom_overrides)
         model.trainer = CustomWeightedTrainer(overrides=model.overrides)
@@ -649,7 +639,7 @@ def train_yolo_model(
         )
         exit(1)
     return results
-def get_classwise_results(model_path: str):
+def get_classwise_results(model_path: str, yaml_path: str = "data.yaml"):
     """
     This function loads a trained YOLO model and retrieves class-wise precision results and prints them.
     Args:
@@ -658,7 +648,7 @@ def get_classwise_results(model_path: str):
         None
     """
     model = YOLO(model_path)
-    results = model.val()
+    results = model.val(data = yaml_path)
     # The class names are stored in the model object
     class_names = results.names 
 
@@ -691,7 +681,6 @@ def train_with_data_in_cloud():
         batch_size=BATCH_SIZE,
         device=DEVICE,
         mlflow_tracking=ML_FLOW_TRACKING,  # Enable MLflow logging
-        augmentations=augmentation,
         callbacks=callbacks,
     )
     return model
@@ -724,6 +713,7 @@ if __name__ == "__main__":
     # train model based on where the data is
     # model = train_with_data_in_cloud()
     model = train_with_data_locally("2025-10-09_len_14200")
-    # path = r"ultralytics_yolo_project_Label_smoothing_head/yolov11n_run2/weights/best.pt"
-    # get_classwise_results(path)
+    #path = r"ultralytics_yolo_projectAug_overloadeed_yolov11l/yolov11n_run/weights/best.pt"
+    #yaml_path = r"2025-10-09_len_14200/data.yaml"
+    #get_classwise_results(path, yaml_path)
 
