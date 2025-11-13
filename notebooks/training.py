@@ -34,13 +34,13 @@ print(f"DEBUG CHECK: Initial RANK={RANK}, LOCAL_RANK={LOCAL_RANK}")
 GCS_BUCKET_NAME = "open-cityvision"
 GCS_DATA_PATH = "."  # Path *within* your GCS bucket to the dataset root
 LOCAL_DATA_DIR = os.getcwd()  # the current directory where the data will be downloaded
-MLFLOW_EXPERIMENT_NAME = "nano12Nov"
+MLFLOW_EXPERIMENT_NAME = "_nov 13_test"
 
 # YOLO Model Configuration
 IMG_SIZE = 640
 BATCH_SIZE = 128
 DEVICE = 0
-EPOCHS = 700
+EPOCHS = 1
 FREEZE_LAYERS = 10
 LEARNING_RATE = 0.00002
 COSLR = False
