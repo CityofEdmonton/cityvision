@@ -16,6 +16,8 @@ import torch
 from ultralytics.utils.loss import v8DetectionLoss
 from ultralytics.utils.tal import  make_anchors
 from typing import Any, Union, Tuple, Dict
+from ultralytics.utils.loss import FocalLoss
+
 from ultralytics.utils import (
     DEFAULT_CFG,
     GIT,
@@ -34,15 +36,15 @@ print(f"DEBUG CHECK: Initial RANK={RANK}, LOCAL_RANK={LOCAL_RANK}")
 GCS_BUCKET_NAME = "open-cityvision"
 GCS_DATA_PATH = "."  # Path *within* your GCS bucket to the dataset root
 LOCAL_DATA_DIR = os.getcwd()  # the current directory where the data will be downloaded
-MLFLOW_EXPERIMENT_NAME = "_nov 13_test"
+MLFLOW_EXPERIMENT_NAME = "_nov_14_weighted_loss"
 
 # YOLO Model Configuration
-IMG_SIZE = 640
+IMG_SIZE = (384, 576) # TODO: change to imgsz=(384, 576)
 BATCH_SIZE = 128
 DEVICE = 0
-EPOCHS = 1
+EPOCHS = 700
 FREEZE_LAYERS = 10
-LEARNING_RATE = 0.00002
+LEARNING_RATE = 0.0001
 COSLR = False
 ML_FLOW_TRACKING = True
 REGULARIZATION_WEIGHT = 0.001
@@ -51,7 +53,7 @@ MODEL_TYPE = "yolo11n.pt"
 WORKERS = 0  # Number of data loading workers (0 means however many cores are available)
 OPTIMIZER = "Adam"  # setting optimizer ot Adam to make sure the lr is set correctly
 ALPHA_FOR_SAMPLER = 0.7
-LABEL_SMOOTHING_FACTOR = 0 # Set to 0 to disable label smoothing, or a value in [0, 1] to enable
+LABEL_SMOOTHING_FACTOR = 0.1 # Set to 0 to disable label smoothing, or a value in [0, 1] to enable
 PATIENCE = 400
 AUGMENTATION = {
     # --- Photometric (HSV) Augmentations ---
@@ -426,7 +428,12 @@ class CustomWeightedTrainer(DetectionTrainer):
                 self.stride = loaded_model_instance.stride  # Also set the stride property for safety
             except Exception as e:
                 print(f"Warning: Failed to pre-load model object using YOLO constructor: {e}")
-        # Replace the default loss function with the custom one
+    def get_model(self, cfg: str | None = None, weights: str | None = None, verbose: bool = True):
+        model = super().get_model(cfg, weights, verbose=verbose)
+        # Customize model's loss function
+        model.model[-1].loss_fn = FocalLoss(gamma=2.0, alpha=0.25)  # Adjust parameters as needed
+        print("✅ CustomDetectionTrainer get_model Called. FocalLoss injected into model.")
+        return model
         
 
     def get_dataloader(self, dataset_path: str, batch_size: int = 16, rank: int = 0, mode: str = "train"):
@@ -495,112 +502,57 @@ class CustomWeightedTrainer(DetectionTrainer):
         # This method handles model compilation, freezing, DDP setup, dataloader creation,
         # and most importantly, sets self.loss_names to ('box_loss', 'cls_loss', 'dfl_loss').
         super()._setup_train() 
-        global CLASS_WEIGHTS
-        if CLASS_WEIGHTS is not None:
-            print("✅ Using Class Weights in CustomWeightedTrainer.")
-            train_dataset = self.train_loader.dataset 
-            cls_counts = get_class_counts(train_dataset)
-            CLASS_WEIGHTS = calculate_inverse_frequency_weights(cls_counts)
-        self.loss = CustomDetectionLoss(self.model, class_weights=CLASS_WEIGHTS)
+        # # global CLASS_WEIGHTS
+        # # if CLASS_WEIGHTS is not None:
+        # #     print("✅ Using Class Weights in CustomWeightedTrainer.")
+        # #     train_dataset = self.train_loader.dataset 
+        # #     cls_counts = get_class_counts(train_dataset)
+        # #     CLASS_WEIGHTS = calculate_inverse_frequency_weights(cls_counts)
+        # # self.loss = CustomDetectionLoss(self.model, class_weights=CLASS_WEIGHTS)
         
-        # VERIFICATION: Check that custom loss is actually being used
-        if RANK in {-1, 0}:
-            print("=" * 80, flush=True)
-            print("[_setup_train] 🔍 VERIFYING CUSTOM LOSS IS BEING USED...", flush=True)
-            print(f"[_setup_train] Loss object type: {type(self.loss).__name__}", flush=True)
-            print(f"[_setup_train] Is instance of CustomDetectionLoss: {isinstance(self.loss, CustomDetectionLoss)}", flush=True)
-            print(f"[_setup_train] Is instance of v8DetectionLoss: {isinstance(self.loss, v8DetectionLoss)}", flush=True)
-            if hasattr(self.loss, 'IS_CUSTOM_LOSS'):
-                print(f"[_setup_train] ✅ IS_CUSTOM_LOSS flag: {self.loss.IS_CUSTOM_LOSS}", flush=True)
-                print(f"[_setup_train] ✅ Custom Loss Version: {self.loss.CUSTOM_LOSS_VERSION}", flush=True)
-            else:
-                print("[_setup_train] ❌ WARNING: IS_CUSTOM_LOSS flag NOT FOUND! Custom loss may not be used!", flush=True)
-            print("=" * 80, flush=True)
-            sys.stdout.flush()
+        # # 2. Add the custom class-wise loss names
+        # nc = 9 # Get the corrected class count (9) from your custom loss module
         
-        # 2. Add the custom class-wise loss names
-        nc = self.loss.nc # Get the corrected class count (9) from your custom loss module
+        # custom_loss_names = [f'cls_loss_C{i}' for i in range(nc)]
+        # print("Custom class-wise loss names to add:", custom_loss_names)
         
-        custom_loss_names = [f'cls_loss_C{i}' for i in range(nc)]
-        print("Custom class-wise loss names to add:", custom_loss_names)
+        # new_loss_names = list(self.loss_names) # Start with ['box_loss', 'cls_loss', 'dfl_loss']
         
-        new_loss_names = list(self.loss_names) # Start with ['box_loss', 'cls_loss', 'dfl_loss']
+        # # Insert or append the 9 new names
+        # if new_loss_names[-1] == 'dfl_loss':
+        #     # Append 9 custom loss names after the 3 standard ones
+        #     new_loss_names.extend(custom_loss_names)
         
-        # Insert or append the 9 new names
-        if new_loss_names[-1] == 'dfl_loss':
-            # Append 9 custom loss names after the 3 standard ones
-            new_loss_names.extend(custom_loss_names)
+        # self.loss_names = new_loss_names
         
-        self.loss_names = new_loss_names
-        
-        # Update the validator's loss names too (used in final evaluation log headers)
-        if self.validator:
-            self.validator.loss_names = self.loss_names
+        # # Update the validator's loss names too (used in final evaluation log headers)
+        # if self.validator:
+        #     self.validator.loss_names = self.loss_names
 
-        # VERIFICATION: Check that custom loss names are present
-        if RANK in {-1, 0}:
-            print(f"✅ Trainer Logging: Updated loss_names to include {nc} custom class-wise losses.")
-            print(f"[_setup_train] Total loss names: {len(self.loss_names)}", flush=True)
-            print(f"[_setup_train] Loss names: {self.loss_names}", flush=True)
-            has_custom_losses = any('cls_loss_C' in name for name in self.loss_names)
-            if has_custom_losses:
-                print(f"[_setup_train] ✅ VERIFIED: Custom class-wise loss names found in loss_names!", flush=True)
-            else:
-                print(f"[_setup_train] ❌ WARNING: Custom class-wise loss names NOT found in loss_names!", flush=True)
-            sys.stdout.flush()
+        # # VERIFICATION: Check that custom loss names are present
+        # if RANK in {-1, 0}:
+        #     print(f"✅ Trainer Logging: Updated loss_names to include {nc} custom class-wise losses.")
+        #     print(f"[_setup_train] Total loss names: {len(self.loss_names)}", flush=True)
+        #     print(f"[_setup_train] Loss names: {self.loss_names}", flush=True)
+        #     has_custom_losses = any('cls_loss_C' in name for name in self.loss_names)
+        #     if has_custom_losses:
+        #         print(f"[_setup_train] ✅ VERIFIED: Custom class-wise loss names found in loss_names!", flush=True)
+        #     else:
+        #         print(f"[_setup_train] ❌ WARNING: Custom class-wise loss names NOT found in loss_names!", flush=True)
+        #     sys.stdout.flush()
 
 
-    # def label_loss_items(self, loss_items=None, prefix="train"):
-    #     """
-    #     Returns a dictionary of loss metrics (or list of names if loss_items is None).
-    #     Handles both 3-item (val) and 12-item (train) losses.
-    #     """
-    #     # 1. Handle Header Names (loss_items is None)
-    #     if loss_items is None:
-    #         # self.loss_names (12 items) is correct here.
-    #         return self.loss_names 
-        
-    #     # 2. Handle Loss Values (loss_items is the tensor/tuple of values)
-        
-    #     # Convert to a list of Python floats regardless of original type (tensor/tuple)
-    #     if isinstance(loss_items, torch.Tensor):
-    #         loss_values = loss_items.tolist()
-    #     elif isinstance(loss_items, (list, tuple)):
-    #         # Crucial: Convert any nested tensors to floats too, and flatten if needed
-    #         # For validation, it often passes a 3-item tuple of tensors, not your custom 12.
-    #         # We must handle the case where it's 3 items (box, cls, dfl) from the Validator.
-            
-    #         flat_loss_values = []
-    #         for item in loss_items:
-    #             if isinstance(item, torch.Tensor):
-    #                 flat_loss_values.extend(item.tolist())
-    #             elif isinstance(item, (float, int)):
-    #                 flat_loss_values.append(item)
-    #             else:
-    #                 # Catch the case where an unexpected tuple/list might be passed
-    #                 # This is likely where your original code failed to flatten/convert
-    #                 flat_loss_values.extend(list(item))
-    #         loss_values = flat_loss_values
-    #     else:
-    #         loss_values = list(loss_items) # Fallback
-
-    #     # Check if it's the 3-item validation output or the 12-item training output
-    #     if len(loss_values) == 3 and len(self.loss_names) == 12:
-    #         # This is validation output (only box, cls, dfl are returned by the Validator)
-    #         # Ultralytics Validator does not calculate the class-wise losses.
-    #         # Pad the remaining 9 custom losses with 0.0 for consistent logging structure
-    #         # The base 3 loss names must match the first 3 values in self.loss_names
-    #         loss_values.extend([0.0] * 9) 
-
-    #     # Final check for size consistency
-    #     if len(loss_values) != len(self.loss_names):
-    #          raise ValueError(f"Loss length mismatch: Expected {len(self.loss_names)}, got {len(loss_values)}")
-
-    #     # Map the 12 loss values to the 12 loss names (headers)
-    #     all_losses_dict = dict(zip(self.loss_names, loss_values))
-
-    #     # The BaseTrainer handles the 'train/' or 'val/' prefix for the keys
-    #     return all_losses_dict
+    def label_loss_items(self, loss_items=None, prefix="train"):
+        """
+        Returns a dictionary of loss metrics (or list of names if loss_items is None).
+        Handles both 3-item (val) and 12-item (train) losses.
+        """
+        keys = [f"{prefix}/{x}" for x in self.loss_names]
+        if loss_items is not None:
+            loss_items = [round(float(x), 5) for x in loss_items]  # convert tensors to 5 decimal place floats
+            return dict(zip(keys, loss_items))
+        else:
+            return keys
 
 def verify_custom_loss_is_used(trainer):
     """
@@ -661,6 +613,7 @@ def verify_custom_loss_is_used(trainer):
     
     return results
 
+
 def train_yolo_model(
     data_yaml_path: str,
     model: YOLO,
@@ -713,6 +666,7 @@ def train_yolo_model(
             'project': "ultralytics_yolo_project" + MLFLOW_EXPERIMENT_NAME,
             'name': "yolov11n_run",
             'patience': PATIENCE,
+
         }
         if augmentations:
             custom_overrides.update(augmentations)
@@ -771,6 +725,8 @@ def train_yolo_model(
         )
         exit(1)
     return results
+
+
 def get_classwise_results(model_path: str, yaml_path: str = "data.yaml"):
     """
     This function loads a trained YOLO model and retrieves class-wise precision results and prints them.
@@ -838,50 +794,6 @@ def train_with_data_locally(dataset_location):
         callbacks=callbacks,
     )
     return model
-
-def test_custom_loss_instantiation():
-    """
-    Simple test function to verify that CustomDetectionLoss can be instantiated correctly.
-    This can be called independently to test the loss function.
-    """
-    print("\n" + "=" * 80)
-    print("🧪 TESTING CUSTOM LOSS INSTANTIATION")
-    print("=" * 80)
-    
-    try:
-        # Create a minimal model to test with
-        model = YOLO(MODEL_TYPE)
-        
-        # Try to instantiate the custom loss
-        print("Creating CustomDetectionLoss instance...", flush=True)
-        custom_loss = CustomDetectionLoss(model.model, class_weights=None)
-        
-        # Verify the loss
-        print("\nVerifying loss properties...", flush=True)
-        assert isinstance(custom_loss, CustomDetectionLoss), "Loss is not CustomDetectionLoss instance!"
-        assert hasattr(custom_loss, 'IS_CUSTOM_LOSS'), "IS_CUSTOM_LOSS flag not found!"
-        assert custom_loss.IS_CUSTOM_LOSS == True, "IS_CUSTOM_LOSS flag is not True!"
-        assert hasattr(custom_loss, 'CUSTOM_LOSS_VERSION'), "CUSTOM_LOSS_VERSION not found!"
-        assert hasattr(custom_loss, 'bce'), "BCE loss not found!"
-        assert isinstance(custom_loss.bce, SmoothBCEWithLogitsLoss), "BCE is not SmoothBCEWithLogitsLoss!"
-        
-        print("\n✅ ALL TESTS PASSED: Custom loss is working correctly!", flush=True)
-        print(f"   - Loss type: {type(custom_loss).__name__}", flush=True)
-        print(f"   - IS_CUSTOM_LOSS: {custom_loss.IS_CUSTOM_LOSS}", flush=True)
-        print(f"   - Version: {custom_loss.CUSTOM_LOSS_VERSION}", flush=True)
-        print(f"   - Number of classes: {custom_loss.nc}", flush=True)
-        print("=" * 80 + "\n", flush=True)
-        sys.stdout.flush()
-        
-        return True
-        
-    except Exception as e:
-        print(f"\n❌ TEST FAILED: {e}", flush=True)
-        import traceback
-        traceback.print_exc()
-        print("=" * 80 + "\n", flush=True)
-        sys.stdout.flush()
-        return False
 
 # --- Main Execution Flow ---
 if __name__ == "__main__":
