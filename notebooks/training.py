@@ -1,10 +1,13 @@
 # Import necessary libraries
 from ultralytics import YOLO
+import yaml
+from collections import Counter
+import os
 import os
 import sys
 from typing import Union, Tuple
 from ultralytics import settings
-from utils import download_data_from_gcs, unzipDataset
+from utils import download_data_from_gcs, unzipDataset, analyze_yolo_dataset
 from ultralytics.models.yolo.detect import DetectionTrainer
 from ultralytics.data.build import InfiniteDataLoader, build_dataloader
 from ultralytics.utils import DEFAULT_CFG
@@ -31,18 +34,17 @@ from ultralytics.utils import (
     colorstr,
     emojis,
 )
-print(f"DEBUG CHECK: Initial RANK={RANK}, LOCAL_RANK={LOCAL_RANK}")
 # --- Configuration ---
 GCS_BUCKET_NAME = "open-cityvision"
 GCS_DATA_PATH = "."  # Path *within* your GCS bucket to the dataset root
 LOCAL_DATA_DIR = os.getcwd()  # the current directory where the data will be downloaded
-MLFLOW_EXPERIMENT_NAME = "_nov_14_weighted_loss"
+MLFLOW_EXPERIMENT_NAME = "_nov_18_yolo11n_loss_classweights"
 
 # YOLO Model Configuration
 IMG_SIZE = (384, 576) # TODO: change to imgsz=(384, 576)
 BATCH_SIZE = 128
 DEVICE = 0
-EPOCHS = 700
+EPOCHS = 1
 FREEZE_LAYERS = 10
 LEARNING_RATE = 0.0001
 COSLR = False
@@ -77,48 +79,24 @@ AUGMENTATION = {
     "copy_paste": 1,      #see mixupo# Copy objects from one image and paste to another (Probability)
 }
 
-CLASS_WEIGHTS = False # Make this to None to disable class weights
+CLASS_WEIGHTS = True # Make this to None to disable class weights
 
-def make_image_weights(dataset, alpha=0.7):
-    """
-    Builds per-image weights from class frequencies.
-    alpha in [0,1]: 0 = no weighting, 1 = full inverse-frequency.
-    Inputs:
-        dataset: a YOLO dataset object with .labels and .data["names"]
-        alpha: weighting exponent
-    Outputs:
-        img_w: a torch.DoubleTensor of per-image weights
-    """
-    ncls = len(dataset.data["names"])
-    cls_counts = np.zeros(ncls, dtype=np.int64)
-    img_classes = [set() for _ in range(len(dataset))]
+def get_class_weights(data_yaml_path):
+    class_counts = analyze_yolo_dataset(data_yaml_path)[0]
+    total = sum(class_counts.values())
+    nc = len(class_counts)
+    class_weights = [1.0 for _ in range(nc)]
 
-    # dataset.labels is a list of dicts with "cls" and "bboxes"
-    for i, lab in enumerate(dataset.labels):
-        cls_data = lab["cls"]
-        # handle when cls data is not numpy array
-        if not isinstance(cls_data, np.ndarray):
-            cls_data = np.array(cls_data)
-        if cls_data.size == 0 or cls_data.ndim == 0:
-            continue
-        if cls_data.ndim > 1:
-            cls_data = cls_data.flatten()
-        if len(cls_data):
-            classes = cls_data.astype(int).tolist()
-            for c in classes:
-                cls_counts[c] += 1
-            img_classes[i].update(classes)
-
-    # inverse frequency ^ alpha
-    inv = 1.0 / np.clip(cls_counts, 1, None)
-    inv = inv ** alpha
-
-    # per-image weight: max weight of classes present (aggressive toward rare)
-    img_w = np.array([float(inv[list(s)].max() if s else 1.0) for s in img_classes],
-                     dtype=np.float32)
-    # normalize (not strictly required)
-    img_w /= (img_w.mean() + 1e-12)
-    return torch.DoubleTensor(img_w)
+    if total > 0:
+        for i in range(nc):
+            count = class_counts.get(i, 0)
+            class_weights[i] = 1.0 / (count + 1e-6)
+        s = sum(class_weights)
+        if s > 0:
+            class_weights = [cw * nc / s for cw in class_weights]
+        else:
+            class_weights = [1.0 for _ in range(nc)]
+    return class_weights
 
 def taper_augmentations(trainer, start_ratio=0.70):
     """
@@ -143,476 +121,6 @@ def on_train_epoch_start(trainer):
 callbacks = {
     "on_train_epoch_start": on_train_epoch_start,
 }
-
-def get_class_counts(dataset):
-    """
-    Calculates the total instance count for each class across the dataset.
-    """
-    ncls = len(dataset.data["names"])
-    cls_counts = np.zeros(ncls, dtype=np.int64)
-
-    # dataset.labels is a list of dicts with "cls" and "bboxes"
-    for lab in dataset.labels:
-        cls_data = lab["cls"]
-        if not isinstance(cls_data, np.ndarray):
-            cls_data = np.array(cls_data)
-        if cls_data.size == 0 or cls_data.ndim == 0:
-            continue
-        if cls_data.ndim > 1:
-            cls_data = cls_data.flatten()
-        if len(cls_data):
-            classes = cls_data.astype(int).tolist()
-            for c in classes:
-                cls_counts[c] += 1
-                
-    return cls_counts # Returns a numpy array of [count_c0, count_c1, ...]
-
-
-def calculate_inverse_frequency_weights(cls_counts):
-    """
-    Calculates inverse-frequency weights for the loss function. Simple inverse frequency.
-
-    """
-    cls_counts = np.maximum(cls_counts, 1)  # Avoid division by zero
-    total_instances = np.sum(cls_counts)
-
-    weights = 1.0 / cls_counts
-
-    return weights.tolist()
-
-class SmoothBCEWithLogitsLoss(nn.BCEWithLogitsLoss):
-    """
-    A custom BCE loss that implements label smoothing by modifying the target tensor. It also supports class-wise loss weighting.
-    Inherits from PyTorch's standard BCE with logits loss.
-    """
-    def __init__(self, smooth_alpha=0.0, class_weights=None, **kwargs):
-        """
-        Initializes the SmoothBCEWithLogitsLoss.
-        Args:
-            smooth_alpha (float): Smoothing factor in [0, 1]. 0 means no smoothing.
-            class_weights (list or tensor): Class-wise weights for the loss. Shape [C].
-            **kwargs: Additional keyword arguments for nn.BCEWithLogitsLoss.
-        """
-        super().__init__(**kwargs)
-        self.smooth_alpha = smooth_alpha
-        self.reduction = self.reduction # inherit reduction method
-        if class_weights is not None:
-            self.register_buffer("class_weights", torch.tensor(class_weights, dtype=torch.float32))
-        else:
-            self.class_weights = None
-        print(f"SmoothBCEWithLogitsLoss initialized with smooth_alpha={smooth_alpha} and class_weights={class_weights}")
-    def forward(self, input, target):
-        """
-        Forward pass for the loss computation.
-        """
-        if self.smooth_alpha > 0:
-            if RANK in {-1, 0}:
-                print(f"Applying label smoothing with alpha={self.smooth_alpha}")
-            # target is the hard label tensor (0 or 1)
-            
-            target_smoothed = target.clone()
-
-            # Set positive targets to (1.0 - alpha)
-            target_smoothed[target == 1] = 1.0 - self.smooth_alpha
-            num_classes = input.size(1)
-            print("num_classes in smoothing loss:", num_classes)
-            # Set negative targets to alpha
-            target_smoothed[target == 0] = self.smooth_alpha/max(1, (num_classes - 1))
-            
-            target = target_smoothed.to(input.dtype)
-        if self.class_weights is not None:
-            if RANK in {0,-1}:
-                print(f"Rank 0: Applying class weights: {self.class_weights}")
-            weights_per_anchor = self.class_weights.to(input.device).view(1, -1) # Shape [1, C]
-            
-            # Standard BCEWithLogitsLoss does not accept a weight for reduction='none'.
-            # We must apply the weight manually after the loss is calculated.
-            raw_loss = super().forward(input, target) # This returns a loss tensor of shape [N, C]
-            if RANK in {-1, 0}:
-                # These two print statements will now only execute and print on the main process
-                print(f"[Rank 0 Debug] raw_loss shape: {raw_loss.shape}")
-                print(f"[Rank 0 Debug] weights_per_anchor shape: {weights_per_anchor.shape}")
-            
-            # Manual weighted loss: Multiply the loss by the class weight tensor
-            # The multiplication broadcasts correctly: [N, C] * [1, C] = [N, C]
-            weighted_loss = raw_loss * weights_per_anchor 
-            return weighted_loss
-        # Calculate loss using the smoothed targets
-        return super().forward(input, target)
-
-
-class CustomDetectionLoss(v8DetectionLoss):
-    """
-    A custom detection loss that incorporates label smoothing and weighted loss into the classification loss.
-    Inherits from the standard v8DetectionLoss.
-    """
-    # Unique identifier to verify this custom loss is being used
-    IS_CUSTOM_LOSS = True
-    CUSTOM_LOSS_VERSION = "1.0.0"
-    
-    def __init__(self, model, class_weights=None):
-        super().__init__(model)
-        
-        
-        m = model.model[-1]  # Get the Detect() module instance
-        self.nc = 9    
-        self.cls_loss_log = torch.zeros(self.nc, device=self.device)
-        self.cls_counts_log = torch.zeros(self.nc, device=self.device)
-        self._call_count = 0  # Counter to limit print frequency
-        weight_status = "Enabled" if class_weights is not None else "Disabled"
-        
-        # Verification prints - these should ALWAYS show up
-        if RANK in {-1, 0}:
-            print("=" * 80, flush=True)
-            print(f"[CustomDetectionLoss.__init__] ✅ CUSTOM LOSS INITIALIZED!", flush=True)
-            print(f"[CustomDetectionLoss.__init__] Loss Type: {type(self).__name__}", flush=True)
-            print(f"[CustomDetectionLoss.__init__] Is Custom Loss: {self.IS_CUSTOM_LOSS}", flush=True)
-            print(f"[CustomDetectionLoss.__init__] Version: {self.CUSTOM_LOSS_VERSION}", flush=True)
-            print(f"[CustomDetectionLoss.__init__] Manual Label Smoothing Activated (Alpha: {LABEL_SMOOTHING_FACTOR})", flush=True)
-            print(f"[CustomDetectionLoss.__init__] Class-Wise Loss Weighting {weight_status}.", flush=True)
-            print(f"[CustomDetectionLoss.__init__] Class-Wise Loss Logging Enabled for {self.nc} classes.", flush=True)
-            if class_weights is not None:
-                print(f"[CustomDetectionLoss.__init__] Class Weights: {class_weights}", flush=True)
-            print("=" * 80, flush=True)
-            sys.stdout.flush()
-        
-        # Inject Custom Loss and Initialize Logging Tensors
-        self.bce = SmoothBCEWithLogitsLoss(
-            smooth_alpha=LABEL_SMOOTHING_FACTOR,
-            class_weights=class_weights, 
-            reduction='none' # Must be 'none' to keep the loss tensor [N, C]
-        )
-
-    def __call__(self, preds: Any, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
-        """Calculate the sum of the loss for box, cls and dfl, and log class-wise loss."""
-        
-        # Increment call counter
-        self._call_count += 1
-        
-        # Debug print - only on main process, with explicit flushing, and limit frequency
-        if RANK in {-1, 0}:
-            # Print on first call and every 100 calls
-            if self._call_count == 1 or self._call_count % 100 == 0:
-                print(f"[CustomDetectionLoss.__call__] Loss function called! Call #{self._call_count}, RANK={RANK}", flush=True)
-                sys.stdout.flush()
-        
-        # Original Setup and Assignment-  same as base class
-        loss = torch.zeros(3, device=self.device)  # box, cls, dfl
-        feats = preds[1] if isinstance(preds, tuple) else preds
-        pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
-            (self.reg_max * 4, self.nc), 1
-        )
-
-        pred_scores = pred_scores.permute(0, 2, 1).contiguous()
-        pred_distri = pred_distri.permute(0, 2, 1).contiguous()
-
-        dtype = pred_scores.dtype
-        batch_size = pred_scores.shape[0]
-        imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]
-        anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
-
-        # Targets
-        targets = torch.cat((batch["batch_idx"].view(-1, 1), batch["cls"].view(-1, 1), batch["bboxes"]), 1)
-        targets = self.preprocess(targets, batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
-        gt_labels, gt_bboxes = targets.split((1, 4), 2)
-        mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0.0)
-
-        # Pboxes
-        pred_bboxes = self.bbox_decode(anchor_points, pred_distri)
-
-        # Assigner call to find positive samples and target scores/bboxes
-        # We need the assignment output (especially fg_mask and target_scores)
-        target_labels, target_bboxes, target_scores, fg_mask, _ = self.assigner(
-            pred_scores.detach().sigmoid(),
-            (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
-            anchor_points * stride_tensor,
-            gt_labels,
-            gt_bboxes,
-            mask_gt,
-        )
-
-        target_scores_sum = max(target_scores.sum(), 1)
-        
-        # Classification Loss
-
-        # Calculate classification loss for all samples/classes (tensor of shape [N_anchors, N_classes])
-        cls_losses = self.bce(pred_scores, target_scores.to(dtype))
-        
-        # Debug print for weighted loss calculation
-        if RANK in {-1, 0} and (self._call_count == 1 or self._call_count % 100 == 0):
-            print(f"[CustomDetectionLoss.__call__] Calculated cls_losses shape: {cls_losses.shape}, fg_mask sum: {fg_mask.sum().item()}", flush=True)
-            sys.stdout.flush()
-        
-        # Get ground truth classes for positive samples 
-        gt_classes = target_scores[fg_mask].argmax(dim=1) # [N_positive]
-        
-        # Accumulate Class-Wise Loss (for logging)
-        if fg_mask.sum():
-            # Filter the loss tensor to only positive samples
-            cls_losses_pos = cls_losses[fg_mask] # [N_positive, N_classes]
-            
-            for i in range(self.nc):
-                # Mask for positive samples belonging to true class 'i'
-                class_mask = (gt_classes == i)
-                if class_mask.sum() > 0:
-                    # Sum the loss only for the true class index 'i'
-                    class_loss_i = cls_losses_pos[class_mask, i].sum()
-                    self.cls_loss_log[i] += class_loss_i.detach()
-                    self.cls_counts_log[i] += class_mask.sum().detach()
-
-        # Original Aggregation (for backprop)
-        # The total CLS loss for backprop is the sum of losses *only for the positive class* # for all positive samples (normalized later).
-        if fg_mask.sum():
-             # Get the loss only for the assigned (true) class for each positive sample
-            lcls_total = cls_losses_pos[torch.arange(cls_losses_pos.shape[0]), gt_classes].sum()
-            loss[1] = lcls_total / target_scores_sum # This is the main aggregated cls loss
-        else:
-             loss[1] = torch.zeros(1, device=self.device)
-            
-        # Bbox and DFL Loss (Rest of the original __call__)
-        if fg_mask.sum():
-            loss[0], loss[2] = self.bbox_loss(
-                pred_distri,
-                pred_bboxes,
-                anchor_points,
-                target_bboxes / stride_tensor,
-                target_scores,
-                target_scores_sum,
-                fg_mask,
-            )
-
-        loss[0] *= self.hyp.box
-        loss[1] *= self.hyp.cls
-        loss[2] *= self.hyp.dfl
-        
-        # Final Return and Logging Cleanup
-
-        # Normalize the class-wise loss for logging (mean loss per sample for that class)
-        non_zero_counts = torch.where(self.cls_counts_log > 0, self.cls_counts_log, torch.ones_like(self.cls_counts_log))
-        mean_cls_loss_per_class = (self.cls_loss_log / non_zero_counts).tolist()
-
-        # Create a list of the 3 main loss components (detached)
-        main_loss_items = loss.detach().tolist()
-        
-        # Add the class-wise loss items to the logging list
-        # This list of metrics is what the Trainer will log
-        loss_items = main_loss_items + mean_cls_loss_per_class
-
-        # Reset accumulators for the next batch
-        self.cls_loss_log = torch.zeros(self.nc, device=self.device)
-        self.cls_counts_log = torch.zeros(self.nc, device=self.device)
-
-        # Debug print for final loss values
-        if RANK in {-1, 0} and (self._call_count == 1 or self._call_count % 100 == 0):
-            print(f"[CustomDetectionLoss.__call__] Final losses - box: {loss[0].item():.4f}, cls: {loss[1].item():.4f}, dfl: {loss[2].item():.4f}, total: {loss.sum().item() * batch_size:.4f}", flush=True)
-            sys.stdout.flush()
-
-        # Return the scaled loss for backprop and the loss items for logging
-        return loss.sum() * batch_size, torch.tensor(loss_items, device=self.device)
-
-class CustomWeightedTrainer(DetectionTrainer):
-    def __init__(self, cfg=DEFAULT_CFG, overrides=None, _callbacks=None):
-        """Initializes the CustomWeightedTrainer and loads the model object.
-        Args:
-            cfg (dict): Configuration dictionary.
-            overrides (dict): Overrides for the configuration.
-            _callbacks (dict): Callbacks for training events.
-        """
-        super().__init__(cfg, overrides, _callbacks)
-        print("✅ CustomWeightedTrainer Initialized.")
-        if isinstance(self.model, str):
-            # only load if model is a string path
-            try:
-                loaded_model_instance = YOLO(self.model)
-                self.model = loaded_model_instance.model
-                self.stride = loaded_model_instance.stride  # Also set the stride property for safety
-            except Exception as e:
-                print(f"Warning: Failed to pre-load model object using YOLO constructor: {e}")
-    def get_model(self, cfg: str | None = None, weights: str | None = None, verbose: bool = True):
-        model = super().get_model(cfg, weights, verbose=verbose)
-        # Customize model's loss function
-        model.model[-1].loss_fn = FocalLoss(gamma=2.0, alpha=0.25)  # Adjust parameters as needed
-        print("✅ CustomDetectionTrainer get_model Called. FocalLoss injected into model.")
-        return model
-        
-
-    def get_dataloader(self, dataset_path: str, batch_size: int = 16, rank: int = 0, mode: str = "train"):
-        """
-        Overrides the base method to inject WeightedRandomSampler for training.
-        """
-        assert mode in {"train", "val"}, f"Mode must be 'train' or 'val', not {mode}."
-
-        # This section is directly copied/adapted from the base DetectionTrainer
-        with torch_distributed_zero_first(rank):
-            dataset = self.build_dataset(dataset_path, mode, batch_size) # This loads data
-            
-        shuffle = mode == "train"
-        if getattr(dataset, "rect", False) and shuffle:
-            shuffle = False
-        # Inserting the weighted sampler for training mode
-        if mode == 'train':
-            # Calculate weights using your function
-            weights = make_image_weights(dataset, alpha=ALPHA_FOR_SAMPLER)
-            
-            # Create the custom sampler
-            sampler = WeightedRandomSampler(
-                weights, num_samples=len(dataset), replacement=True
-            )
-            
-            # Use the PyTorch DataLoader to build the sampler into the loader
-            base_loader = InfiniteDataLoader(
-                dataset,
-                batch_size=batch_size,
-                sampler=sampler,               # Inject the sampler here
-                num_workers=self.args.workers,
-                pin_memory=True,
-                collate_fn=getattr(dataset, 'collate_fn', None), # Get collate_fn from dataset or default
-                drop_last=False
-            )
-            
-            # The returned loader MUST be converted back to the InfiniteDataLoader
-            return base_loader
-
-        # For validation, we use the standard build_dataloader (without the custom sampler)
-        return build_dataloader(
-            dataset,
-            batch=batch_size,
-            workers=self.args.workers if mode == "train" else self.args.workers * 2,
-            shuffle=shuffle,
-            rank=rank,
-            drop_last=self.args.compile and mode == "train",
-        )
-
-    def train(self):
-        print("✅ CustomWeightedTrainer train Called.")
-        """Overrides DetectionTrainer.train to ensure custom loss is used."""
-        return super().train()  # Call the parent method which handles the training process
-    
-    def _do_train(self):
-        print("✅ CustomWeightedTrainer _do_train Called.")
-        """Overrides DetectionTrainer._do_train to ensure custom loss is used."""
-        super()._do_train()  # Call the parent method which handles the training loop
-    # changing the setuptrain method to add the custom loss tracking
-    def _setup_train(self):
-        print("✅ CustomWeightedTrainer _setup_train Called.")
-        """Overrides the parent BaseTrainer._setup_train (via DetectionTrainer's inheritance) 
-        to inject custom loss item names after initialization."""
-        
-        # 1. Call parent's setup_train method (actually runs BaseTrainer._setup_train)
-        # This method handles model compilation, freezing, DDP setup, dataloader creation,
-        # and most importantly, sets self.loss_names to ('box_loss', 'cls_loss', 'dfl_loss').
-        super()._setup_train() 
-        # # global CLASS_WEIGHTS
-        # # if CLASS_WEIGHTS is not None:
-        # #     print("✅ Using Class Weights in CustomWeightedTrainer.")
-        # #     train_dataset = self.train_loader.dataset 
-        # #     cls_counts = get_class_counts(train_dataset)
-        # #     CLASS_WEIGHTS = calculate_inverse_frequency_weights(cls_counts)
-        # # self.loss = CustomDetectionLoss(self.model, class_weights=CLASS_WEIGHTS)
-        
-        # # 2. Add the custom class-wise loss names
-        # nc = 9 # Get the corrected class count (9) from your custom loss module
-        
-        # custom_loss_names = [f'cls_loss_C{i}' for i in range(nc)]
-        # print("Custom class-wise loss names to add:", custom_loss_names)
-        
-        # new_loss_names = list(self.loss_names) # Start with ['box_loss', 'cls_loss', 'dfl_loss']
-        
-        # # Insert or append the 9 new names
-        # if new_loss_names[-1] == 'dfl_loss':
-        #     # Append 9 custom loss names after the 3 standard ones
-        #     new_loss_names.extend(custom_loss_names)
-        
-        # self.loss_names = new_loss_names
-        
-        # # Update the validator's loss names too (used in final evaluation log headers)
-        # if self.validator:
-        #     self.validator.loss_names = self.loss_names
-
-        # # VERIFICATION: Check that custom loss names are present
-        # if RANK in {-1, 0}:
-        #     print(f"✅ Trainer Logging: Updated loss_names to include {nc} custom class-wise losses.")
-        #     print(f"[_setup_train] Total loss names: {len(self.loss_names)}", flush=True)
-        #     print(f"[_setup_train] Loss names: {self.loss_names}", flush=True)
-        #     has_custom_losses = any('cls_loss_C' in name for name in self.loss_names)
-        #     if has_custom_losses:
-        #         print(f"[_setup_train] ✅ VERIFIED: Custom class-wise loss names found in loss_names!", flush=True)
-        #     else:
-        #         print(f"[_setup_train] ❌ WARNING: Custom class-wise loss names NOT found in loss_names!", flush=True)
-        #     sys.stdout.flush()
-
-
-    def label_loss_items(self, loss_items=None, prefix="train"):
-        """
-        Returns a dictionary of loss metrics (or list of names if loss_items is None).
-        Handles both 3-item (val) and 12-item (train) losses.
-        """
-        keys = [f"{prefix}/{x}" for x in self.loss_names]
-        if loss_items is not None:
-            loss_items = [round(float(x), 5) for x in loss_items]  # convert tensors to 5 decimal place floats
-            return dict(zip(keys, loss_items))
-        else:
-            return keys
-
-def verify_custom_loss_is_used(trainer):
-    """
-    Helper function to verify that the custom loss is being used in training.
-    
-    Args:
-        trainer: The CustomWeightedTrainer instance (or any trainer with a loss attribute)
-    
-    Returns:
-        dict: Dictionary with verification results
-    """
-    results = {
-        'is_custom_loss': False,
-        'loss_type': None,
-        'has_custom_flag': False,
-        'has_custom_loss_names': False,
-        'loss_names_count': 0,
-        'verification_passed': False
-    }
-    
-    if not hasattr(trainer, 'loss'):
-        print("❌ VERIFICATION FAILED: Trainer has no 'loss' attribute!", flush=True)
-        return results
-    
-    loss = trainer.loss
-    results['loss_type'] = type(loss).__name__
-    results['is_custom_loss'] = isinstance(loss, CustomDetectionLoss)
-    
-    if hasattr(loss, 'IS_CUSTOM_LOSS'):
-        results['has_custom_flag'] = True
-        results['is_custom_loss'] = loss.IS_CUSTOM_LOSS
-    
-    if hasattr(trainer, 'loss_names'):
-        results['loss_names_count'] = len(trainer.loss_names)
-        results['has_custom_loss_names'] = any('cls_loss_C' in name for name in trainer.loss_names)
-    
-    results['verification_passed'] = (
-        results['is_custom_loss'] and 
-        results['has_custom_flag'] and 
-        results['has_custom_loss_names']
-    )
-    
-    # Print verification results
-    print("=" * 80, flush=True)
-    print("🔍 CUSTOM LOSS VERIFICATION RESULTS", flush=True)
-    print("=" * 80, flush=True)
-    print(f"Loss Type: {results['loss_type']}", flush=True)
-    print(f"Is CustomDetectionLoss instance: {results['is_custom_loss']}", flush=True)
-    print(f"Has IS_CUSTOM_LOSS flag: {results['has_custom_flag']}", flush=True)
-    print(f"Has custom loss names (cls_loss_C*): {results['has_custom_loss_names']}", flush=True)
-    print(f"Total loss names: {results['loss_names_count']}", flush=True)
-    if results['verification_passed']:
-        print("✅ VERIFICATION PASSED: Custom loss is being used!", flush=True)
-    else:
-        print("❌ VERIFICATION FAILED: Custom loss may not be properly configured!", flush=True)
-    print("=" * 80, flush=True)
-    sys.stdout.flush()
-    
-    return results
-
 
 def train_yolo_model(
     data_yaml_path: str,
@@ -666,13 +174,14 @@ def train_yolo_model(
             'project': "ultralytics_yolo_project" + MLFLOW_EXPERIMENT_NAME,
             'name': "yolov11n_run",
             'patience': PATIENCE,
+            'label_smoothing': LABEL_SMOOTHING_FACTOR,
+            'class_weights': CLASS_WEIGHTS,
 
         }
         if augmentations:
             custom_overrides.update(augmentations)
 
         model.overrides.update(custom_overrides)
-        model.trainer = CustomWeightedTrainer(overrides=model.overrides)
         for i in callbacks:
             model.add_callback(i, callbacks[i])
         
@@ -681,11 +190,8 @@ def train_yolo_model(
         print("\n--- Starting Training (Custom Loss Verification will occur during setup) ---", flush=True)
         sys.stdout.flush()
         
-        results = model.trainer.train()
-        
-        # Verify custom loss after training (loss should be set up by now)
-        if hasattr(model.trainer, 'loss'):
-            verify_custom_loss_is_used(model.trainer)
+        results = model.train()
+    
         
         print("\n--- Training Complete! ---")
         save_dir = model.trainer.save_dir  # Directory where results are saved
@@ -726,24 +232,6 @@ def train_yolo_model(
         exit(1)
     return results
 
-
-def get_classwise_results(model_path: str, yaml_path: str = "data.yaml"):
-    """
-    This function loads a trained YOLO model and retrieves class-wise precision results and prints them.
-    Args:
-        model_path (str): Path to the trained YOLO model file (e.g., best.pt).
-    Returns:
-        None
-    """
-    model = YOLO(model_path)
-    results = model.val(data = yaml_path)
-    # The class names are stored in the model object
-    class_names = results.names 
-
-    # Access the list of dictionaries containing per-class metrics
-    class_metrics = results.box.class_result
-
-    
 def train_with_data_in_cloud():
     """
     This function downloads data from GCS, unzips it, and trains the YOLO model.
@@ -797,11 +285,14 @@ def train_with_data_locally(dataset_location):
 
 # --- Main Execution Flow ---
 if __name__ == "__main__":
-    # print("Starting the training script...")
+    if CLASS_WEIGHTS:
+        CLASS_WEIGHTS = get_class_weights(data_yaml_path="2025-10-09_len_14200/data.yaml")
+    print("Class weights used for training: ", CLASS_WEIGHTS)
     # train model based on where the data is
     # model = train_with_data_in_cloud()
     model = train_with_data_locally("2025-10-09_len_14200")
     #path = r"ultralytics_yolo_projectAug_overloadeed_yolov11l/yolov11n_run/weights/best.pt"
     #yaml_path = r"2025-10-09_len_14200/data.yaml"
-    #get_classwise_results(path, yaml_path)
+    #get_classwise_results(path, yaml_path) 
+    
 
