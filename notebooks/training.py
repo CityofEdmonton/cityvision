@@ -39,15 +39,15 @@ from ultralytics.utils import (
 GCS_BUCKET_NAME = "open-cityvision"
 GCS_DATA_PATH = "."  # Path *within* your GCS bucket to the dataset root
 LOCAL_DATA_DIR = os.getcwd()  # the current directory where the data will be downloaded
-MLFLOW_EXPERIMENT_NAME = "_nov_18_yolo11n_loss_classweights"
+MLFLOW_EXPERIMENT_NAME = "_nov_18_cls_weight"
 
 # YOLO Model Configuration
 IMG_SIZE = (384, 576)  # TODO: change to imgsz=(384, 576)
 BATCH_SIZE = 128
 DEVICE = 0
-EPOCHS = 1
+EPOCHS = 700
 FREEZE_LAYERS = 10
-LEARNING_RATE = 0.0001
+LEARNING_RATE = 0.001
 COSLR = False
 ML_FLOW_TRACKING = True
 REGULARIZATION_WEIGHT = 0.001
