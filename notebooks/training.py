@@ -17,7 +17,7 @@ import torch.nn as nn
 import numpy as np
 import torch
 from ultralytics.utils.loss import v8DetectionLoss
-from ultralytics.utils.tal import  make_anchors
+from ultralytics.utils.tal import make_anchors
 from typing import Any, Union, Tuple, Dict
 from ultralytics.utils.loss import FocalLoss
 
@@ -34,6 +34,7 @@ from ultralytics.utils import (
     colorstr,
     emojis,
 )
+
 # --- Configuration ---
 GCS_BUCKET_NAME = "open-cityvision"
 GCS_DATA_PATH = "."  # Path *within* your GCS bucket to the dataset root
@@ -41,7 +42,7 @@ LOCAL_DATA_DIR = os.getcwd()  # the current directory where the data will be dow
 MLFLOW_EXPERIMENT_NAME = "_nov_18_yolo11n_loss_classweights"
 
 # YOLO Model Configuration
-IMG_SIZE = (384, 576) # TODO: change to imgsz=(384, 576)
+IMG_SIZE = (384, 576)  # TODO: change to imgsz=(384, 576)
 BATCH_SIZE = 128
 DEVICE = 0
 EPOCHS = 1
@@ -55,31 +56,33 @@ MODEL_TYPE = "yolo11n.pt"
 WORKERS = 0  # Number of data loading workers (0 means however many cores are available)
 OPTIMIZER = "Adam"  # setting optimizer ot Adam to make sure the lr is set correctly
 ALPHA_FOR_SAMPLER = 0.7
-LABEL_SMOOTHING_FACTOR = 0.1 # Set to 0 to disable label smoothing, or a value in [0, 1] to enable
+LABEL_SMOOTHING_FACTOR = (
+    0.1  # Set to 0 to disable label smoothing, or a value in [0, 1] to enable
+)
 PATIENCE = 400
 AUGMENTATION = {
     # --- Photometric (HSV) Augmentations ---
-    "hsv_h": 0.015,         # Hue augmentation (+/- 0.015)
-    "hsv_s": 0.7,           # Saturation augmentation (+/- 0.7)
-    "hsv_v": 0.6,           # Brightness/Value augmentation (+/- 0.4)
-
+    "hsv_h": 0.015,  # Hue augmentation (+/- 0.015)
+    "hsv_s": 0.7,  # Saturation augmentation (+/- 0.7)
+    "hsv_v": 0.6,  # Brightness/Value augmentation (+/- 0.4)
     # --- Geometric Augmentations (Requires BBox Transformation) ---
-    "degrees": 180.0,       # Image rotation (+/- degrees). Set to 1.0 - 5.0 if needed.
-    "translate": 0.3,       # Image translation (+/- fraction of image size)
-    "scale": 0.5,           # Image scaling (zoom out 0.5x to zoom in 1.5x)
-    "shear": 5,           # Image shear (+/- degrees). Set to 1.0 - 5.0 if needed.
-    "perspective": 0.0001	,     # Perspective transform (random fraction). Set to 0.001 if needed.
-    "flipud": 1,          # Flip image Up-Down (Probability). Set to 0.1 for general tasks.
-    "fliplr": 1,          # Flip image Left-Right (Probability)
+    "degrees": 180.0,  # Image rotation (+/- degrees). Set to 1.0 - 5.0 if needed.
+    "translate": 0.3,  # Image translation (+/- fraction of image size)
+    "scale": 0.5,  # Image scaling (zoom out 0.5x to zoom in 1.5x)
+    "shear": 5,  # Image shear (+/- degrees). Set to 1.0 - 5.0 if needed.
+    "perspective": 0.0001,  # Perspective transform (random fraction). Set to 0.001 if needed.
+    "flipud": 1,  # Flip image Up-Down (Probability). Set to 0.1 for general tasks.
+    "fliplr": 1,  # Flip image Left-Right (Probability)
     # "bgr": 0.5,             # Convert image to BGR color space (Probability)
     # --- Compositional Augmentations (Often applied together) ---
     # "mosaic": 0.5,          # Combine 4 images into 1 (Probability)
     # "mixup": 0.3,           # Blend 2 images and labels (Probability)
-    "cutmix": 1,          # Cut a patch from one image and paste to another (Probability)
-    "copy_paste": 1,      #see mixupo# Copy objects from one image and paste to another (Probability)
+    "cutmix": 1,  # Cut a patch from one image and paste to another (Probability)
+    "copy_paste": 1,  # see mixupo# Copy objects from one image and paste to another (Probability)
 }
 
-CLASS_WEIGHTS = True # Make this to None to disable class weights
+CLASS_WEIGHTS = True  # Make this to None to disable class weights
+
 
 def get_class_weights(data_yaml_path):
     class_counts = analyze_yolo_dataset(data_yaml_path)[0]
@@ -98,13 +101,14 @@ def get_class_weights(data_yaml_path):
             class_weights = [1.0 for _ in range(nc)]
     return class_weights
 
+
 def taper_augmentations(trainer, start_ratio=0.70):
     """
     Tapers the augmentation strength during training.
     Args:
         trainer: The training object containing epoch and hyp attributes.
         start_ratio: The ratio of epochs after which to start tapering.
-    
+
     """
     r = trainer.epoch / max(1, trainer.epochs)
     if r >= start_ratio:
@@ -114,13 +118,16 @@ def taper_augmentations(trainer, start_ratio=0.70):
             if H.get(k, 0) > 0:
                 H[k] = 0.0
 
+
 def on_train_epoch_start(trainer):
     """Callback to taper augmentations at the start of each training epoch."""
     taper_augmentations(trainer, start_ratio=0.90)
 
+
 callbacks = {
     "on_train_epoch_start": on_train_epoch_start,
 }
+
 
 def train_yolo_model(
     data_yaml_path: str,
@@ -157,26 +164,25 @@ def train_yolo_model(
             print("MLflow logging is disabled. Training will not log to MLflow.")
         # Manually create the overrides dictionary using all your custom arguments
         custom_overrides = {
-            'data': data_yaml_path,
-            'epochs': epochs,
-            'imgsz': img_size,
-            'batch': batch_size,
-            'device': device,
-            'freeze': FREEZE_LAYERS,
-            'lr0': LEARNING_RATE,
-            'dropout': DROPOUT,
-            'weight_decay': REGULARIZATION_WEIGHT,
-            'workers': WORKERS,
-            'optimizer': OPTIMIZER,
-            'val': True,
-            'cos_lr': COSLR,
-            'plots': True,
-            'project': "ultralytics_yolo_project" + MLFLOW_EXPERIMENT_NAME,
-            'name': "yolov11n_run",
-            'patience': PATIENCE,
-            'label_smoothing': LABEL_SMOOTHING_FACTOR,
-            'class_weights': CLASS_WEIGHTS,
-
+            "data": data_yaml_path,
+            "epochs": epochs,
+            "imgsz": img_size,
+            "batch": batch_size,
+            "device": device,
+            "freeze": FREEZE_LAYERS,
+            "lr0": LEARNING_RATE,
+            "dropout": DROPOUT,
+            "weight_decay": REGULARIZATION_WEIGHT,
+            "workers": WORKERS,
+            "optimizer": OPTIMIZER,
+            "val": True,
+            "cos_lr": COSLR,
+            "plots": True,
+            "project": "ultralytics_yolo_project" + MLFLOW_EXPERIMENT_NAME,
+            "name": "yolov11n_run",
+            "patience": PATIENCE,
+            "label_smoothing": LABEL_SMOOTHING_FACTOR,
+            "class_weights": CLASS_WEIGHTS,
         }
         if augmentations:
             custom_overrides.update(augmentations)
@@ -184,15 +190,17 @@ def train_yolo_model(
         model.overrides.update(custom_overrides)
         for i in callbacks:
             model.add_callback(i, callbacks[i])
-        
+
         # Note: Loss verification will happen automatically in _setup_train() when training starts
         # The verification prints will show up when _setup_train() is called
-        print("\n--- Starting Training (Custom Loss Verification will occur during setup) ---", flush=True)
+        print(
+            "\n--- Starting Training (Custom Loss Verification will occur during setup) ---",
+            flush=True,
+        )
         sys.stdout.flush()
-        
+
         results = model.train()
-    
-        
+
         print("\n--- Training Complete! ---")
         save_dir = model.trainer.save_dir  # Directory where results are saved
         print(f"Results saved to: {save_dir}")
@@ -206,8 +214,9 @@ def train_yolo_model(
                 # Create a GCS destination path that maintains the folder structure
                 relative_path = os.path.relpath(local_file_path, save_dir)
                 from datetime import date
+
                 todays_date = date.today().strftime("%Y-%m-%d")
-                folder = todays_date +  MLFLOW_EXPERIMENT_NAME
+                folder = todays_date + MLFLOW_EXPERIMENT_NAME
                 gcs_path = os.path.join(
                     destination_prefix, folder, relative_path
                 ).replace(
@@ -232,13 +241,14 @@ def train_yolo_model(
         exit(1)
     return results
 
+
 def train_with_data_in_cloud():
     """
     This function downloads data from GCS, unzips it, and trains the YOLO model.
     Returns:
         model (YOLO): Trained YOLO model instance.
     """
-    
+
     # 1. Download data from GCS
     download_data_from_gcs(GCS_BUCKET_NAME, GCS_DATA_PATH, LOCAL_DATA_DIR)
     # 2. Unzip the downloaded files
@@ -261,9 +271,10 @@ def train_with_data_in_cloud():
     )
     return model
 
+
 def train_with_data_locally(dataset_location):
     """
-    This function trains the YOLO model using data located locally. 
+    This function trains the YOLO model using data located locally.
     """
     # get the location of the data.yaml file
     yaml_path = os.path.join(dataset_location, "data.yaml")
@@ -283,16 +294,17 @@ def train_with_data_locally(dataset_location):
     )
     return model
 
+
 # --- Main Execution Flow ---
 if __name__ == "__main__":
     if CLASS_WEIGHTS:
-        CLASS_WEIGHTS = get_class_weights(data_yaml_path="2025-10-09_len_14200/data.yaml")
+        CLASS_WEIGHTS = get_class_weights(
+            data_yaml_path="2025-10-09_len_14200/data.yaml"
+        )
     print("Class weights used for training: ", CLASS_WEIGHTS)
     # train model based on where the data is
     # model = train_with_data_in_cloud()
     model = train_with_data_locally("2025-10-09_len_14200")
-    #path = r"ultralytics_yolo_projectAug_overloadeed_yolov11l/yolov11n_run/weights/best.pt"
-    #yaml_path = r"2025-10-09_len_14200/data.yaml"
-    #get_classwise_results(path, yaml_path) 
-    
-
+    # path = r"ultralytics_yolo_projectAug_overloadeed_yolov11l/yolov11n_run/weights/best.pt"
+    # yaml_path = r"2025-10-09_len_14200/data.yaml"
+    # get_classwise_results(path, yaml_path)

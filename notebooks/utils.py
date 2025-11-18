@@ -280,4 +280,3 @@ def analyze_yolo_dataset(yaml_path: str) -> dict:
     print(f"{'TOTAL:':<32} | {total_items_in_distribution:<10} | {'100.00%':<10}")
     print("=" * 50)
     return global_distribution, total_items_in_distribution, class_names
-
