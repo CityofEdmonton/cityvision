@@ -176,5 +176,9 @@ application_default_credentials.json
 
 # also virtual environments folder
 test_cityvision
+notebooks/.ven/
+
+# The dataset
+notebooks/2025-10-09_len_14200/
 
 .DS_Store
