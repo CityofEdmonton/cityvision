@@ -3,51 +3,27 @@ from ultralytics import YOLO
 import yaml
 from collections import Counter
 import os
-import os
 import sys
 from typing import Union, Tuple
 from ultralytics import settings
 from utils import download_data_from_gcs, unzipDataset, analyze_yolo_dataset
-from ultralytics.models.yolo.detect import DetectionTrainer
-from ultralytics.data.build import InfiniteDataLoader, build_dataloader
-from ultralytics.utils import DEFAULT_CFG
-from torch.utils.data import WeightedRandomSampler
-from ultralytics.utils.torch_utils import torch_distributed_zero_first
-import torch.nn as nn
-import numpy as np
-import torch
-from ultralytics.utils.loss import v8DetectionLoss
-from ultralytics.utils.tal import make_anchors
-from typing import Any, Union, Tuple, Dict
-from ultralytics.utils.loss import FocalLoss
-
-from ultralytics.utils import (
-    DEFAULT_CFG,
-    GIT,
-    LOCAL_RANK,
-    LOGGER,
-    RANK,
-    TQDM,
-    YAML,
-    callbacks,
-    clean_url,
-    colorstr,
-    emojis,
-)
+from typing import Any
+import mlflow
+from ultralytics.utils import callbacks
 
 # --- Configuration ---
 GCS_BUCKET_NAME = "open-cityvision"
 GCS_DATA_PATH = "."  # Path *within* your GCS bucket to the dataset root
 LOCAL_DATA_DIR = os.getcwd()  # the current directory where the data will be downloaded
-MLFLOW_EXPERIMENT_NAME = "_nov_18_cls_weight"
+MLFLOW_EXPERIMENT_NAME = "_nov_24_class_balanced_0_0001"
 
 # YOLO Model Configuration
 IMG_SIZE = (384, 576)  # TODO: change to imgsz=(384, 576)
 BATCH_SIZE = 128
 DEVICE = 0
-EPOCHS = 700
+EPOCHS = 30
 FREEZE_LAYERS = 10
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0001
 COSLR = False
 ML_FLOW_TRACKING = True
 REGULARIZATION_WEIGHT = 0.001
@@ -83,32 +59,73 @@ AUGMENTATION = {
 
 CLASS_WEIGHTS = True  # Make this to None to disable class weights
 
+import math
 
-def get_class_weights(data_yaml_path):
-    class_counts = analyze_yolo_dataset(data_yaml_path)[0]
-    total = sum(class_counts.values())
+
+def get_class_weights(data_yaml_path, beta=0.9999, mode="class_balanced") -> list:
+    """
+    mode:
+      - "class_balanced": Class-Balanced Loss (Cui et al. - https://arxiv.org/pdf/1901.05555)
+      - "inverse_freq"  : your original inverse-frequency scheme
+    Args:
+        data_yaml_path (str): Path to the data.yaml file.
+        beta (float): Hyperparameter for Class-Balanced Loss.
+        mode (str): Weighting scheme to use ("class_balanced" or "inverse_freq").
+    Returns:
+        list: A list of class weights.
+    How to use:
+        CLASS_WEIGHTS = get_class_weights(data_yaml_path="path/to/data.yaml", mode="class_balanced")
+    """
+    class_counts = analyze_yolo_dataset(data_yaml_path)[0]  # {class_id: count}
     nc = len(class_counts)
+    total = sum(class_counts.values())
     class_weights = [1.0 for _ in range(nc)]
 
-    if total > 0:
-        for i in range(nc):
-            count = class_counts.get(i, 0)
-            class_weights[i] = 1.0 / (count + 1e-6)
-        s = sum(class_weights)
+    if total == 0:
+        return class_weights
+
+    if mode == "class_balanced":
+        # Class-Balanced Loss: w_c = (1 - beta) / (1 - beta^{n_c})
+        for c in range(nc):
+            n_c = class_counts.get(c, 0)
+
+            if n_c > 0:
+                effective_num = 1.0 - math.pow(beta, n_c)
+                class_weights[c] = (1.0 - beta) / (effective_num + 1e-8)
+            else:
+                # class not present in dataset; usually safe to give weight 0
+                class_weights[c] = 0.0
+
+        mean_w = sum(class_weights) / max(1, nc)
+        if mean_w > 0:
+            class_weights = [w / mean_w for w in class_weights]
+
+    elif mode == "inverse_freq":
+        tmp_weights = []
+        for c in range(nc):
+            n_c = class_counts.get(c, 0)
+            tmp_weights.append(1.0 / (n_c + 1e-6))
+
+        s = sum(tmp_weights)
         if s > 0:
-            class_weights = [cw * nc / s for cw in class_weights]
+            class_weights = [w * nc / s for w in tmp_weights]
         else:
             class_weights = [1.0 for _ in range(nc)]
+
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
+
     return class_weights
 
 
-def taper_augmentations(trainer, start_ratio=0.70):
+def taper_augmentations(trainer, start_ratio=0.70) -> None:
     """
     Tapers the augmentation strength during training.
     Args:
         trainer: The training object containing epoch and hyp attributes.
         start_ratio: The ratio of epochs after which to start tapering.
-
+    Returns:
+        None
     """
     r = trainer.epoch / max(1, trainer.epochs)
     if r >= start_ratio:
@@ -152,6 +169,35 @@ def train_yolo_model(
         device (str): Device to train on (e.g., '0' for GPU, 'cpu').
         mlflow_tracking (bool): Whether to enable MLflow tracking.
         augmentations (dict): Dictionary containing augmentation parameters.
+        albumentations_transforms (Any): Albumentations transforms to apply.
+        callbacks (dict): Dictionary of callback functions for training.
+    returns:
+        results: The results object returned by the model.train() method.
+    How to use:
+        results = train_yolo_model(
+            data_yaml_path="path/to/data.yaml",
+            model=yolo_model,
+            epochs=30,
+            img_size=640,
+            batch_size=16,
+            device='0',
+            mlflow_tracking=True,
+            augmentations={
+                "hsv_h": 0.015,
+                "hsv_s": 0.7,
+                "hsv_v": 0.4,
+                "degrees": 10.0,
+                "translate": 0.1,
+                "scale": 0.1,
+                "shear": 2.0,
+                "perspective": 0.0,
+                "flipud": 0.0,
+                "fliplr": 0.5,
+                "mosaic": 1.0,
+                "mixup": 0.5,
+            },
+            callbacks=callbacks,
+        )
     """
     try:
         print(f"\n--- Starting YOLO Model Training with {model} ---")
@@ -159,6 +205,16 @@ def train_yolo_model(
             print("\n--- MLflow Logging is Enabled ---")
             # Set up MLflow experiment
             settings.update({"mlflow": True})
+            # get the tracking uri and experiment name from environment variables
+            tracking_uri = os.getenv(
+                "MLFLOW_TRACKING_URI", "https://mlflow-test.edmonton.ca/"
+            )
+            experiment_name = os.getenv(
+                "MLFLOW_EXPERIMENT_NAME", "YOLO_Object_Detection_Training"
+            )
+            run_name = f"{model.model_name}_{MLFLOW_EXPERIMENT_NAME}"
+            mlflow.set_tracking_uri(tracking_uri)
+            mlflow.set_experiment(experiment_name)
 
         else:
             print("MLflow logging is disabled. Training will not log to MLflow.")
@@ -178,8 +234,8 @@ def train_yolo_model(
             "val": True,
             "cos_lr": COSLR,
             "plots": True,
-            "project": "ultralytics_yolo_project" + MLFLOW_EXPERIMENT_NAME,
-            "name": "yolov11n_run",
+            "project": experiment_name,
+            "name": run_name,
             "patience": PATIENCE,
             "label_smoothing": LABEL_SMOOTHING_FACTOR,
             "class_weights": CLASS_WEIGHTS,
@@ -242,11 +298,14 @@ def train_yolo_model(
     return results
 
 
-def train_with_data_in_cloud():
+def train_with_data_in_cloud() -> YOLO:
     """
     This function downloads data from GCS, unzips it, and trains the YOLO model.
     Returns:
         model (YOLO): Trained YOLO model instance.
+    How to use:
+        model = train_with_data_in_cloud()
+
     """
 
     # 1. Download data from GCS
@@ -272,9 +331,15 @@ def train_with_data_in_cloud():
     return model
 
 
-def train_with_data_locally(dataset_location):
+def train_with_data_locally(dataset_location: str) -> YOLO:
     """
     This function trains the YOLO model using data located locally.
+    Args:
+        dataset_location (str): Path to the local dataset directory.
+    Returns:
+        model (YOLO): Trained YOLO model instance.
+    How to use:
+        model = train_with_data_locally("path/to/local/dataset")
     """
     # get the location of the data.yaml file
     yaml_path = os.path.join(dataset_location, "data.yaml")
@@ -292,19 +357,34 @@ def train_with_data_locally(dataset_location):
         augmentations=augmentation,
         callbacks=callbacks,
     )
+
     return model
+
+
+def print_validation_results(model_path: str) -> None:
+    """
+    Prints the validation results in a readable format.
+    Args:
+        results: The results object returned by the model.val() method.
+    How to use:
+        print_validation_results("path/to/model.pt")
+    """
+    model = YOLO(model_path)
+    results = model.val()
+    print("\n--- Validation Results ---")
+    print(f"mAP@0.5: {results.box.map_50:.4f}")
+    print(f"mAP@0.5:0.95: {results.box.map_50_95:.4f}")
+    print(f"Precision: {results.box.precision:.4f}")
+    print(f"Recall: {results.box.recall:.4f}")
 
 
 # --- Main Execution Flow ---
 if __name__ == "__main__":
     if CLASS_WEIGHTS:
         CLASS_WEIGHTS = get_class_weights(
-            data_yaml_path="2025-10-09_len_14200/data.yaml"
+            data_yaml_path="2025-10-09_len_14200/data.yaml", mode="class_balanced"
         )
     print("Class weights used for training: ", CLASS_WEIGHTS)
     # train model based on where the data is
     # model = train_with_data_in_cloud()
-    model = train_with_data_locally("2025-10-09_len_14200")
-    # path = r"ultralytics_yolo_projectAug_overloadeed_yolov11l/yolov11n_run/weights/best.pt"
-    # yaml_path = r"2025-10-09_len_14200/data.yaml"
-    # get_classwise_results(path, yaml_path)
+    # model = train_with_data_locally("2025-10-09_len_14200")
