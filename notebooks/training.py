@@ -207,8 +207,8 @@ def train_yolo_model(
         print(f"\n--- Starting YOLO Model Training with {model} ---")
         if class_weights:
             class_weights = get_class_weights(
-            data_yaml_path=data_yaml_path, mode="class_balanced"
-        )
+                data_yaml_path=data_yaml_path, mode="class_balanced"
+            )
         if mlflow_tracking:
             print("\n--- MLflow Logging is Enabled ---")
             # Set up MLflow experiment
