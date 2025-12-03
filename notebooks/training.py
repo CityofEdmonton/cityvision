@@ -6,10 +6,14 @@ import os
 import sys
 from typing import Union, Tuple
 from ultralytics import settings
-from utils import download_data_from_gcs, unzipDataset, analyze_yolo_dataset
+from notebooks.utils import download_data_from_gcs, unzipDataset, analyze_yolo_dataset
 from typing import Any
 import mlflow
 from ultralytics.utils import callbacks
+from google.cloud import storage
+from datetime import date
+import math
+
 
 # --- Configuration ---
 GCS_BUCKET_NAME = "open-cityvision"
@@ -18,7 +22,7 @@ LOCAL_DATA_DIR = os.getcwd()  # the current directory where the data will be dow
 MLFLOW_EXPERIMENT_NAME = "_nov_24_class_balanced_0_0001"
 
 # YOLO Model Configuration
-IMG_SIZE = (384, 576)  # TODO: change to imgsz=(384, 576)
+IMG_SIZE = 640  # TODO: change to imgsz=(384, 576)
 BATCH_SIZE = 128
 DEVICE = 0
 EPOCHS = 30
@@ -58,8 +62,6 @@ AUGMENTATION = {
 }
 
 CLASS_WEIGHTS = True  # Make this to None to disable class weights
-
-import math
 
 
 def get_class_weights(data_yaml_path, beta=0.9999, mode="class_balanced") -> list:
@@ -157,6 +159,8 @@ def train_yolo_model(
     augmentations: dict = None,
     albumentations_transforms: Any = None,
     callbacks: dict = callbacks,
+    MLFLOW_EXPERIMENT_NAME: str = MLFLOW_EXPERIMENT_NAME,
+    class_weights: Union[list, None] = CLASS_WEIGHTS,
 ) -> None:
     """
     Trains a YOLO model with specified parameters.
@@ -201,6 +205,10 @@ def train_yolo_model(
     """
     try:
         print(f"\n--- Starting YOLO Model Training with {model} ---")
+        if class_weights:
+            class_weights = get_class_weights(
+            data_yaml_path=data_yaml_path, mode="class_balanced"
+        )
         if mlflow_tracking:
             print("\n--- MLflow Logging is Enabled ---")
             # Set up MLflow experiment
@@ -234,12 +242,13 @@ def train_yolo_model(
             "val": True,
             "cos_lr": COSLR,
             "plots": True,
-            "project": experiment_name,
-            "name": run_name,
             "patience": PATIENCE,
             "label_smoothing": LABEL_SMOOTHING_FACTOR,
-            "class_weights": CLASS_WEIGHTS,
+            "class_weights": class_weights,
         }
+        if mlflow_tracking:
+            custom_overrides["project"] = experiment_name
+            custom_overrides["name"] = run_name
         if augmentations:
             custom_overrides.update(augmentations)
 
@@ -269,8 +278,6 @@ def train_yolo_model(
                 local_file_path = os.path.join(root, file)
                 # Create a GCS destination path that maintains the folder structure
                 relative_path = os.path.relpath(local_file_path, save_dir)
-                from datetime import date
-
                 todays_date = date.today().strftime("%Y-%m-%d")
                 folder = todays_date + MLFLOW_EXPERIMENT_NAME
                 gcs_path = os.path.join(
@@ -279,7 +286,6 @@ def train_yolo_model(
                     "\\", "/"
                 )  # Use forward slashes
                 print(f"GCS Path: {gcs_path}")
-                from google.cloud import storage
 
                 storage_client = storage.Client()
                 bucket = storage_client.bucket("open-cityvision")
@@ -343,6 +349,7 @@ def train_with_data_locally(dataset_location: str) -> YOLO:
     """
     # get the location of the data.yaml file
     yaml_path = os.path.join(dataset_location, "data.yaml")
+    print("the path from yaml is ", yaml_path)
     # 3. Train the YOLO model
     model = YOLO(MODEL_TYPE)
     augmentation = AUGMENTATION

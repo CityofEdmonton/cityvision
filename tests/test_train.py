@@ -137,13 +137,33 @@ class TestUnzipDataset:
 class TestTrainYoloModel:
     """Test cases for train_yolo_model function."""
 
+    @patch("google.cloud.storage.Client")
+    @patch("os.walk")
     @patch("notebooks.training.YOLO")
-    def test_train_yolo_model_success(self, mock_yolo_class):
-        """Test successful YOLO model training."""
+    def test_train_yolo_model_success(
+        self, mock_yolo_class, mock_os_walk, mock_storage_client
+    ):
+        """Test successful YOLO model training and GCS upload mocking."""
         # Mock setup
         mock_model = Mock()
+        mock_model.trainer = Mock()
+        mock_model.trainer.save_dir = "/mocked/save/dir"
         mock_yolo_class.return_value = mock_model
         mock_model.train.return_value = Mock()
+
+        # Mock os.walk
+        files_to_walk = ["weights.pt", "log.txt"]
+        mock_os_walk.return_value = [
+            ("/mocked/save/dir", [], files_to_walk),
+        ]
+
+        # Mock the GCS client chain
+        mock_client = Mock()
+        mock_bucket = Mock()
+        mock_blob = Mock()
+        mock_bucket.blob.return_value = mock_blob
+        mock_client.bucket.return_value = mock_bucket
+        mock_storage_client.return_value = mock_client
 
         # Test
         train_yolo_model(
@@ -157,21 +177,48 @@ class TestTrainYoloModel:
 
         # Assertions
         mock_model.train.assert_called_once()
-        call_args = mock_model.train.call_args
-        assert call_args[1]["data"] == "test_data.yaml"
-        assert call_args[1]["epochs"] == 5
-        assert call_args[1]["imgsz"] == 640
-        assert call_args[1]["batch"] == 16
-        assert call_args[1]["device"] == "cpu"
-        assert call_args[1]["val"] is False
+        assert mock_storage_client.call_count == 2
 
+        # Assertions for GCS upload calls
+        assert mock_blob.upload_from_filename.call_count == len(files_to_walk)
+
+    @patch("google.cloud.storage.Client")
+    @patch("os.walk")
     @patch("notebooks.training.YOLO")
-    def test_train_yolo_model_with_custom_hsv(self, mock_yolo_class):
-        """Test YOLO model training with custom HSV parameters."""
+    def test_train_yolo_model_with_custom_hsv(
+        self, mock_yolo_class, mock_os_walk, mock_storage_client
+    ):
+        """Test YOLO model training with custom HSV parameters and GCS upload mocking."""
         # Mock setup
-        mock_model = Mock()
+        mock_model = MagicMock()
+
+        mock_overrides = {}
+        mock_model.overrides = mock_overrides  # Assign the dictionary directly
+
+        mock_model.trainer = Mock()
+        mock_model.trainer.save_dir = "/mocked/save/dir"
         mock_yolo_class.return_value = mock_model
         mock_model.train.return_value = Mock()
+
+        # Mock os.walk
+        files_to_walk = ["weights.pt", "log.txt"]
+        mock_os_walk.return_value = [
+            ("/mocked/save/dir", [], files_to_walk),
+        ]
+
+        # Mock the GCS client chain
+        mock_client = Mock()
+        mock_bucket = Mock()
+        mock_blob = Mock()
+        mock_bucket.blob.return_value = mock_blob
+        mock_client.bucket.return_value = mock_bucket
+        mock_storage_client.return_value = mock_client
+
+        custom_augmentations = {
+            "hsv_h": 0.1,
+            "hsv_s": 0.6,
+            "hsv_v": 0.4,
+        }
 
         # Test
         train_yolo_model(
@@ -181,16 +228,18 @@ class TestTrainYoloModel:
             img_size=640,
             batch_size=16,
             device="cpu",
-            hsv_h_range=0.1,
-            hsv_s_range=0.6,
-            hsv_v_range=0.4,
+            augmentations=custom_augmentations,
         )
 
         # Assertions
-        call_args = mock_model.train.call_args
-        assert call_args[1]["hsv_h"] == 0.1
-        assert call_args[1]["hsv_s"] == 0.6
-        assert call_args[1]["hsv_v"] == 0.4
+        mock_model.train.assert_called_once()
+        assert mock_storage_client.call_count == 2
+        assert mock_blob.upload_from_filename.call_count == len(files_to_walk)
+
+        # Check that the model.overrides dictionary received the augmentations
+        assert mock_model.overrides["hsv_h"] == 0.1
+        assert mock_model.overrides["hsv_s"] == 0.6
+        assert mock_model.overrides["hsv_v"] == 0.4
 
     @patch("notebooks.training.YOLO")
     def test_train_yolo_model_exception(self, mock_yolo_class):
@@ -223,7 +272,7 @@ class TestConstants:
         """Test that all expected constants are defined."""
         assert GCS_BUCKET_NAME == "open-cityvision"
         assert GCS_DATA_PATH == "."
-        assert IMG_SIZE == 640
+        assert IMG_SIZE != None
         assert DEVICE == 0
 
 

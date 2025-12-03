@@ -37,7 +37,7 @@ traitlets==5.1.1
 transformers==4.49.0
 ultralytics==8.3.85
 ultralytics-thop==2.0.14
-wandb
+mlflow
 
 # PyTorch (with CUDA 12.8 support)
 --extra-index-url https://download.pytorch.org/whl/cu128
