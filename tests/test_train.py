@@ -136,20 +136,25 @@ class TestUnzipDataset:
 
 class TestTrainYoloModel:
     """Test cases for train_yolo_model function."""
-
+    
+    @patch("notebooks.training.analyze_yolo_dataset")
     @patch("google.cloud.storage.Client")
     @patch("os.walk")
     @patch("notebooks.training.YOLO")
     def test_train_yolo_model_success(
-        self, mock_yolo_class, mock_os_walk, mock_storage_client
+        self, mock_yolo_class, mock_os_walk, mock_storage_client, mock_analyze
     ):
         """Test successful YOLO model training and GCS upload mocking."""
+
+
         # Mock setup
         mock_model = Mock()
         mock_model.trainer = Mock()
         mock_model.trainer.save_dir = "/mocked/save/dir"
         mock_yolo_class.return_value = mock_model
         mock_model.train.return_value = Mock()
+
+        mock_analyze.return_value = ({0: 10, 1: 20}, ["class0", "class1"])
 
         # Mock os.walk
         files_to_walk = ["weights.pt", "log.txt"]
@@ -182,11 +187,12 @@ class TestTrainYoloModel:
         # Assertions for GCS upload calls
         assert mock_blob.upload_from_filename.call_count == len(files_to_walk)
 
+    @patch("notebooks.training.analyze_yolo_dataset")
     @patch("google.cloud.storage.Client")
     @patch("os.walk")
     @patch("notebooks.training.YOLO")
     def test_train_yolo_model_with_custom_hsv(
-        self, mock_yolo_class, mock_os_walk, mock_storage_client
+        self, mock_yolo_class, mock_os_walk, mock_storage_client, mock_analyze
     ):
         """Test YOLO model training with custom HSV parameters and GCS upload mocking."""
         # Mock setup
@@ -199,6 +205,8 @@ class TestTrainYoloModel:
         mock_model.trainer.save_dir = "/mocked/save/dir"
         mock_yolo_class.return_value = mock_model
         mock_model.train.return_value = Mock()
+
+        mock_analyze.return_value = ({0: 10, 1: 20}, ["class0", "class1"])
 
         # Mock os.walk
         files_to_walk = ["weights.pt", "log.txt"]
@@ -241,14 +249,17 @@ class TestTrainYoloModel:
         assert mock_model.overrides["hsv_s"] == 0.6
         assert mock_model.overrides["hsv_v"] == 0.4
 
+
+    @patch("notebooks.training.analyze_yolo_dataset")
     @patch("notebooks.training.YOLO")
-    def test_train_yolo_model_exception(self, mock_yolo_class):
+    def test_train_yolo_model_exception(self, mock_yolo_class, mock_analyze):
         """Test handling of exceptions during training."""
         # Mock setup
         mock_model = Mock()
         mock_yolo_class.return_value = mock_model
         mock_model.train.side_effect = Exception("Training failed")
-
+        # Mock analyze_yolo_dataset
+        mock_analyze.return_value = ({0: 10, 1: 20}, ["class0", "class1"])
         # Test
         with patch("builtins.print") as mock_print:
             with pytest.raises(SystemExit):
