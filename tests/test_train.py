@@ -136,7 +136,7 @@ class TestUnzipDataset:
 
 class TestTrainYoloModel:
     """Test cases for train_yolo_model function."""
-    
+
     @patch("notebooks.training.analyze_yolo_dataset")
     @patch("google.cloud.storage.Client")
     @patch("os.walk")
@@ -145,7 +145,6 @@ class TestTrainYoloModel:
         self, mock_yolo_class, mock_os_walk, mock_storage_client, mock_analyze
     ):
         """Test successful YOLO model training and GCS upload mocking."""
-
 
         # Mock setup
         mock_model = Mock()
@@ -248,7 +247,6 @@ class TestTrainYoloModel:
         assert mock_model.overrides["hsv_h"] == 0.1
         assert mock_model.overrides["hsv_s"] == 0.6
         assert mock_model.overrides["hsv_v"] == 0.4
-
 
     @patch("notebooks.training.analyze_yolo_dataset")
     @patch("notebooks.training.YOLO")
