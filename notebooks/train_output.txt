@@ -1,0 +1,881 @@
+
+--- YOLO Dataset Analyzer ---
+Dataset Root: 2025-10-09_len_14200
+Number of Classes (nc): 9
+Class Map: {0: 'Pedestrians', 1: 'Bicycle', 2: 'E-Scooters', 3: 'Motorbike', 4: 'Car', 5: 'Light Goods Vehicle', 6: 'Single-Unit Truck', 7: 'Bus', 8: 'Articulated Trucks'}
+-----------------------------------
+
+Processing Train list file: 2025-10-09_len_14200/train.txt
+Total images processed: 10221, Total objects found: 18880 (Excluding backgrounds)
+
+Processing Validation list file: 2025-10-09_len_14200/val.txt
+Total images processed: 3979, Total objects found: 16870 (Excluding backgrounds)
+
+Processing Test list file: 2025-10-09_len_14200/test.txt
+Total images processed: 2871, Total objects found: 13934 (Excluding backgrounds)
+
+==================================================
+      FINAL CLASS DISTRIBUTION REPORT
+==================================================
+Class ID   | Class Name           | Count      | Percentage
+--------------------------------------------------
+--         | Background Images    | 1121       | 2.21%
+--------------------------------------------------
+0          | Pedestrians          | 1352       | 2.66%
+1          | Bicycle              | 8          | 0.02%
+2          | E-Scooters           | 6          | 0.01%
+3          | Motorbike            | 5          | 0.01%
+4          | Car                  | 41463      | 81.61%
+5          | Light Goods Vehicle  | 6254       | 12.31%
+6          | Single-Unit Truck    | 415        | 0.82%
+7          | Bus                  | 177        | 0.35%
+8          | Articulated Trucks   | 4          | 0.01%
+--------------------------------------------------
+TOTAL:                           | 50805      | 100.00%   
+==================================================
+Class weights used for training:  [0.00886805945766292, 1.4987018621158086, 1.998269066226544, 2.397922799541106, 0.00028916422823575637, 0.0019171116715240193, 0.028890641847560697, 0.06773794535531291, 2.997403349556245]
+
+--- Starting YOLO Model Training with YOLO(
+  (model): DetectionModel(
+    (model): Sequential(
+      (0): Conv(
+        (conv): Conv2d(3, 16, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        (bn): BatchNorm2d(16, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+        (act): SiLU(inplace=True)
+      )
+      (1): Conv(
+        (conv): Conv2d(16, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        (bn): BatchNorm2d(32, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+        (act): SiLU(inplace=True)
+      )
+      (2): C3k2(
+        (cv1): Conv(
+          (conv): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(32, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (cv2): Conv(
+          (conv): Conv2d(48, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (m): ModuleList(
+          (0): Bottleneck(
+            (cv1): Conv(
+              (conv): Conv2d(16, 8, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(8, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (cv2): Conv(
+              (conv): Conv2d(8, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(16, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+          )
+        )
+      )
+      (3): Conv(
+        (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+        (act): SiLU(inplace=True)
+      )
+      (4): C3k2(
+        (cv1): Conv(
+          (conv): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (cv2): Conv(
+          (conv): Conv2d(96, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (m): ModuleList(
+          (0): Bottleneck(
+            (cv1): Conv(
+              (conv): Conv2d(32, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(16, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (cv2): Conv(
+              (conv): Conv2d(16, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(32, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+          )
+        )
+      )
+      (5): Conv(
+        (conv): Conv2d(128, 128, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+        (act): SiLU(inplace=True)
+      )
+      (6): C3k2(
+        (cv1): Conv(
+          (conv): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (cv2): Conv(
+          (conv): Conv2d(192, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (m): ModuleList(
+          (0): C3k(
+            (cv1): Conv(
+              (conv): Conv2d(64, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (bn): BatchNorm2d(32, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (cv2): Conv(
+              (conv): Conv2d(64, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (bn): BatchNorm2d(32, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (cv3): Conv(
+              (conv): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (m): Sequential(
+              (0): Bottleneck(
+                (cv1): Conv(
+                  (conv): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                  (bn): BatchNorm2d(32, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                  (act): SiLU(inplace=True)
+                )
+                (cv2): Conv(
+                  (conv): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                  (bn): BatchNorm2d(32, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                  (act): SiLU(inplace=True)
+                )
+              )
+              (1): Bottleneck(
+                (cv1): Conv(
+                  (conv): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                  (bn): BatchNorm2d(32, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                  (act): SiLU(inplace=True)
+                )
+                (cv2): Conv(
+                  (conv): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                  (bn): BatchNorm2d(32, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                  (act): SiLU(inplace=True)
+                )
+              )
+            )
+          )
+        )
+      )
+      (7): Conv(
+        (conv): Conv2d(128, 256, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        (bn): BatchNorm2d(256, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+        (act): SiLU(inplace=True)
+      )
+      (8): C3k2(
+        (cv1): Conv(
+          (conv): Conv2d(256, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(256, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (cv2): Conv(
+          (conv): Conv2d(384, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(256, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (m): ModuleList(
+          (0): C3k(
+            (cv1): Conv(
+              (conv): Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (cv2): Conv(
+              (conv): Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (cv3): Conv(
+              (conv): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (m): Sequential(
+              (0): Bottleneck(
+                (cv1): Conv(
+                  (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                  (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                  (act): SiLU(inplace=True)
+                )
+                (cv2): Conv(
+                  (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                  (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                  (act): SiLU(inplace=True)
+                )
+              )
+              (1): Bottleneck(
+                (cv1): Conv(
+                  (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                  (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                  (act): SiLU(inplace=True)
+                )
+                (cv2): Conv(
+                  (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                  (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                  (act): SiLU(inplace=True)
+                )
+              )
+            )
+          )
+        )
+      )
+      (9): SPPF(
+        (cv1): Conv(
+          (conv): Conv2d(256, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (cv2): Conv(
+          (conv): Conv2d(512, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(256, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (m): MaxPool2d(kernel_size=5, stride=1, padding=2, dilation=1, ceil_mode=False)
+      )
+      (10): C2PSA(
+        (cv1): Conv(
+          (conv): Conv2d(256, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(256, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (cv2): Conv(
+          (conv): Conv2d(256, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(256, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (m): Sequential(
+          (0): PSABlock(
+            (attn): Attention(
+              (qkv): Conv(
+                (conv): Conv2d(128, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (bn): BatchNorm2d(256, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): Identity()
+              )
+              (proj): Conv(
+                (conv): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): Identity()
+              )
+              (pe): Conv(
+                (conv): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=128, bias=False)
+                (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): Identity()
+              )
+            )
+            (ffn): Sequential(
+              (0): Conv(
+                (conv): Conv2d(128, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (bn): BatchNorm2d(256, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): SiLU(inplace=True)
+              )
+              (1): Conv(
+                (conv): Conv2d(256, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): Identity()
+              )
+            )
+          )
+        )
+      )
+      (11): Upsample(scale_factor=2.0, mode='nearest')
+      (12): Concat()
+      (13): C3k2(
+        (cv1): Conv(
+          (conv): Conv2d(384, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (cv2): Conv(
+          (conv): Conv2d(192, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (m): ModuleList(
+          (0): Bottleneck(
+            (cv1): Conv(
+              (conv): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(32, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (cv2): Conv(
+              (conv): Conv2d(32, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+          )
+        )
+      )
+      (14): Upsample(scale_factor=2.0, mode='nearest')
+      (15): Concat()
+      (16): C3k2(
+        (cv1): Conv(
+          (conv): Conv2d(256, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (cv2): Conv(
+          (conv): Conv2d(96, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (m): ModuleList(
+          (0): Bottleneck(
+            (cv1): Conv(
+              (conv): Conv2d(32, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(16, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (cv2): Conv(
+              (conv): Conv2d(16, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(32, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+          )
+        )
+      )
+      (17): Conv(
+        (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+        (act): SiLU(inplace=True)
+      )
+      (18): Concat()
+      (19): C3k2(
+        (cv1): Conv(
+          (conv): Conv2d(192, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (cv2): Conv(
+          (conv): Conv2d(192, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (m): ModuleList(
+          (0): Bottleneck(
+            (cv1): Conv(
+              (conv): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(32, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (cv2): Conv(
+              (conv): Conv2d(32, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+          )
+        )
+      )
+      (20): Conv(
+        (conv): Conv2d(128, 128, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+        (act): SiLU(inplace=True)
+      )
+      (21): Concat()
+      (22): C3k2(
+        (cv1): Conv(
+          (conv): Conv2d(384, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(256, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (cv2): Conv(
+          (conv): Conv2d(384, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (bn): BatchNorm2d(256, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+          (act): SiLU(inplace=True)
+        )
+        (m): ModuleList(
+          (0): C3k(
+            (cv1): Conv(
+              (conv): Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (cv2): Conv(
+              (conv): Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (cv3): Conv(
+              (conv): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (m): Sequential(
+              (0): Bottleneck(
+                (cv1): Conv(
+                  (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                  (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                  (act): SiLU(inplace=True)
+                )
+                (cv2): Conv(
+                  (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                  (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                  (act): SiLU(inplace=True)
+                )
+              )
+              (1): Bottleneck(
+                (cv1): Conv(
+                  (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                  (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                  (act): SiLU(inplace=True)
+                )
+                (cv2): Conv(
+                  (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                  (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                  (act): SiLU(inplace=True)
+                )
+              )
+            )
+          )
+        )
+      )
+      (23): Detect(
+        (cv2): ModuleList(
+          (0): Sequential(
+            (0): Conv(
+              (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (1): Conv(
+              (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (2): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1))
+          )
+          (1): Sequential(
+            (0): Conv(
+              (conv): Conv2d(128, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (1): Conv(
+              (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (2): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1))
+          )
+          (2): Sequential(
+            (0): Conv(
+              (conv): Conv2d(256, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (1): Conv(
+              (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+              (act): SiLU(inplace=True)
+            )
+            (2): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1))
+          )
+        )
+        (cv3): ModuleList(
+          (0): Sequential(
+            (0): Sequential(
+              (0): DWConv(
+                (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=64, bias=False)
+                (bn): BatchNorm2d(64, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): SiLU(inplace=True)
+              )
+              (1): Conv(
+                (conv): Conv2d(64, 80, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (bn): BatchNorm2d(80, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): SiLU(inplace=True)
+              )
+            )
+            (1): Sequential(
+              (0): DWConv(
+                (conv): Conv2d(80, 80, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=80, bias=False)
+                (bn): BatchNorm2d(80, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): SiLU(inplace=True)
+              )
+              (1): Conv(
+                (conv): Conv2d(80, 80, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (bn): BatchNorm2d(80, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): SiLU(inplace=True)
+              )
+            )
+            (2): Conv2d(80, 80, kernel_size=(1, 1), stride=(1, 1))
+          )
+          (1): Sequential(
+            (0): Sequential(
+              (0): DWConv(
+                (conv): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=128, bias=False)
+                (bn): BatchNorm2d(128, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): SiLU(inplace=True)
+              )
+              (1): Conv(
+                (conv): Conv2d(128, 80, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (bn): BatchNorm2d(80, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): SiLU(inplace=True)
+              )
+            )
+            (1): Sequential(
+              (0): DWConv(
+                (conv): Conv2d(80, 80, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=80, bias=False)
+                (bn): BatchNorm2d(80, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): SiLU(inplace=True)
+              )
+              (1): Conv(
+                (conv): Conv2d(80, 80, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (bn): BatchNorm2d(80, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): SiLU(inplace=True)
+              )
+            )
+            (2): Conv2d(80, 80, kernel_size=(1, 1), stride=(1, 1))
+          )
+          (2): Sequential(
+            (0): Sequential(
+              (0): DWConv(
+                (conv): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=256, bias=False)
+                (bn): BatchNorm2d(256, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): SiLU(inplace=True)
+              )
+              (1): Conv(
+                (conv): Conv2d(256, 80, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (bn): BatchNorm2d(80, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): SiLU(inplace=True)
+              )
+            )
+            (1): Sequential(
+              (0): DWConv(
+                (conv): Conv2d(80, 80, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=80, bias=False)
+                (bn): BatchNorm2d(80, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): SiLU(inplace=True)
+              )
+              (1): Conv(
+                (conv): Conv2d(80, 80, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (bn): BatchNorm2d(80, eps=0.001, momentum=0.03, affine=True, track_running_stats=True)
+                (act): SiLU(inplace=True)
+              )
+            )
+            (2): Conv2d(80, 80, kernel_size=(1, 1), stride=(1, 1))
+          )
+        )
+        (dfl): DFL(
+          (conv): Conv2d(16, 1, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        )
+      )
+    )
+  )
+) ---
+
+--- MLflow Logging is Enabled ---
+
+--- Starting Training (Custom Loss Verification will occur during setup) ---
+Ultralytics 8.3.228 🚀 Python-3.10.14 torch-2.9.1+cu128 CUDA:0 (NVIDIA RTX A6000, 48446MiB)
+[34m[1mengine/trainer: [0magnostic_nms=False, amp=True, augment=False, auto_augment=randaugment, batch=128, bgr=0.0, box=7.5, cache=False, cfg=None, class_weights=[0.00886805945766292, 1.4987018621158086, 1.998269066226544, 2.397922799541106, 0.00028916422823575637, 0.0019171116715240193, 0.028890641847560697, 0.06773794535531291, 2.997403349556245], classes=None, close_mosaic=10, cls=0.5, compile=False, conf=None, copy_paste=1, copy_paste_mode=flip, cos_lr=False, cutmix=1, data=2025-10-09_len_14200/data.yaml, degrees=180.0, deterministic=True, device=0, dfl=1.5, dnn=False, dropout=0.1, dynamic=False, embed=None, epochs=1, erasing=0.4, exist_ok=False, fliplr=1, flipud=1, format=torchscript, fraction=1.0, freeze=10, half=False, hsv_h=0.015, hsv_s=0.7, hsv_v=0.6, imgsz=(384, 576), int8=False, iou=0.7, keras=False, kobj=1.0, label_smoothing=0.1, line_width=None, lr0=0.0001, lrf=0.01, mask_ratio=4, max_det=300, mixup=0.0, mode=train, model=yolo11n.pt, momentum=0.937, mosaic=1.0, multi_scale=False, name=yolov11n_run3, nbs=64, nms=False, opset=None, optimize=False, optimizer=Adam, overlap_mask=True, patience=400, perspective=0.0001, plots=True, pose=12.0, pretrained=True, profile=False, project=ultralytics_yolo_project_nov_18_yolo11n_loss_classweights, rect=False, resume=False, retina_masks=False, save=True, save_conf=False, save_crop=False, save_dir=/data/home2/mikjat/projects/cityvision/notebooks/ultralytics_yolo_project_nov_18_yolo11n_loss_classweights/yolov11n_run3, save_frames=False, save_json=False, save_period=-1, save_txt=False, scale=0.5, seed=0, shear=5, show=False, show_boxes=True, show_conf=True, show_labels=True, simplify=True, single_cls=False, source=None, split=val, stream_buffer=False, task=detect, time=None, tracker=botsort.yaml, translate=0.3, val=True, verbose=True, vid_stride=1, visualize=False, warmup_bias_lr=0.1, warmup_epochs=3.0, warmup_momentum=0.8, weight_decay=0.001, workers=0, workspace=None
+Overriding model.yaml nc=80 with nc=9
+
+                   from  n    params  module                                       arguments                     
+  0                  -1  1       464  ultralytics.nn.modules.conv.Conv             [3, 16, 3, 2]                 
+  1                  -1  1      4672  ultralytics.nn.modules.conv.Conv             [16, 32, 3, 2]                
+  2                  -1  1      6640  ultralytics.nn.modules.block.C3k2            [32, 64, 1, False, 0.25]      
+  3                  -1  1     36992  ultralytics.nn.modules.conv.Conv             [64, 64, 3, 2]                
+  4                  -1  1     26080  ultralytics.nn.modules.block.C3k2            [64, 128, 1, False, 0.25]     
+  5                  -1  1    147712  ultralytics.nn.modules.conv.Conv             [128, 128, 3, 2]              
+  6                  -1  1     87040  ultralytics.nn.modules.block.C3k2            [128, 128, 1, True]           
+  7                  -1  1    295424  ultralytics.nn.modules.conv.Conv             [128, 256, 3, 2]              
+  8                  -1  1    346112  ultralytics.nn.modules.block.C3k2            [256, 256, 1, True]           
+  9                  -1  1    164608  ultralytics.nn.modules.block.SPPF            [256, 256, 5]                 
+ 10                  -1  1    249728  ultralytics.nn.modules.block.C2PSA           [256, 256, 1]                 
+ 11                  -1  1         0  torch.nn.modules.upsampling.Upsample         [None, 2, 'nearest']          
+ 12             [-1, 6]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 13                  -1  1    111296  ultralytics.nn.modules.block.C3k2            [384, 128, 1, False]          
+ 14                  -1  1         0  torch.nn.modules.upsampling.Upsample         [None, 2, 'nearest']          
+ 15             [-1, 4]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 16                  -1  1     32096  ultralytics.nn.modules.block.C3k2            [256, 64, 1, False]           
+ 17                  -1  1     36992  ultralytics.nn.modules.conv.Conv             [64, 64, 3, 2]                
+ 18            [-1, 13]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 19                  -1  1     86720  ultralytics.nn.modules.block.C3k2            [192, 128, 1, False]          
+ 20                  -1  1    147712  ultralytics.nn.modules.conv.Conv             [128, 128, 3, 2]              
+ 21            [-1, 10]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 22                  -1  1    378880  ultralytics.nn.modules.block.C3k2            [384, 256, 1, True]           
+ 23        [16, 19, 22]  1    432427  ultralytics.nn.modules.head.Detect           [9, [64, 128, 256]]           
+YOLO11n summary: 181 layers, 2,591,595 parameters, 2,591,579 gradients, 6.4 GFLOPs
+
+Transferred 448/499 items from pretrained weights
+Freezing layer 'model.0.conv.weight'
+Freezing layer 'model.0.bn.weight'
+Freezing layer 'model.0.bn.bias'
+Freezing layer 'model.1.conv.weight'
+Freezing layer 'model.1.bn.weight'
+Freezing layer 'model.1.bn.bias'
+Freezing layer 'model.2.cv1.conv.weight'
+Freezing layer 'model.2.cv1.bn.weight'
+Freezing layer 'model.2.cv1.bn.bias'
+Freezing layer 'model.2.cv2.conv.weight'
+Freezing layer 'model.2.cv2.bn.weight'
+Freezing layer 'model.2.cv2.bn.bias'
+Freezing layer 'model.2.m.0.cv1.conv.weight'
+Freezing layer 'model.2.m.0.cv1.bn.weight'
+Freezing layer 'model.2.m.0.cv1.bn.bias'
+Freezing layer 'model.2.m.0.cv2.conv.weight'
+Freezing layer 'model.2.m.0.cv2.bn.weight'
+Freezing layer 'model.2.m.0.cv2.bn.bias'
+Freezing layer 'model.3.conv.weight'
+Freezing layer 'model.3.bn.weight'
+Freezing layer 'model.3.bn.bias'
+Freezing layer 'model.4.cv1.conv.weight'
+Freezing layer 'model.4.cv1.bn.weight'
+Freezing layer 'model.4.cv1.bn.bias'
+Freezing layer 'model.4.cv2.conv.weight'
+Freezing layer 'model.4.cv2.bn.weight'
+Freezing layer 'model.4.cv2.bn.bias'
+Freezing layer 'model.4.m.0.cv1.conv.weight'
+Freezing layer 'model.4.m.0.cv1.bn.weight'
+Freezing layer 'model.4.m.0.cv1.bn.bias'
+Freezing layer 'model.4.m.0.cv2.conv.weight'
+Freezing layer 'model.4.m.0.cv2.bn.weight'
+Freezing layer 'model.4.m.0.cv2.bn.bias'
+Freezing layer 'model.5.conv.weight'
+Freezing layer 'model.5.bn.weight'
+Freezing layer 'model.5.bn.bias'
+Freezing layer 'model.6.cv1.conv.weight'
+Freezing layer 'model.6.cv1.bn.weight'
+Freezing layer 'model.6.cv1.bn.bias'
+Freezing layer 'model.6.cv2.conv.weight'
+Freezing layer 'model.6.cv2.bn.weight'
+Freezing layer 'model.6.cv2.bn.bias'
+Freezing layer 'model.6.m.0.cv1.conv.weight'
+Freezing layer 'model.6.m.0.cv1.bn.weight'
+Freezing layer 'model.6.m.0.cv1.bn.bias'
+Freezing layer 'model.6.m.0.cv2.conv.weight'
+Freezing layer 'model.6.m.0.cv2.bn.weight'
+Freezing layer 'model.6.m.0.cv2.bn.bias'
+Freezing layer 'model.6.m.0.cv3.conv.weight'
+Freezing layer 'model.6.m.0.cv3.bn.weight'
+Freezing layer 'model.6.m.0.cv3.bn.bias'
+Freezing layer 'model.6.m.0.m.0.cv1.conv.weight'
+Freezing layer 'model.6.m.0.m.0.cv1.bn.weight'
+Freezing layer 'model.6.m.0.m.0.cv1.bn.bias'
+Freezing layer 'model.6.m.0.m.0.cv2.conv.weight'
+Freezing layer 'model.6.m.0.m.0.cv2.bn.weight'
+Freezing layer 'model.6.m.0.m.0.cv2.bn.bias'
+Freezing layer 'model.6.m.0.m.1.cv1.conv.weight'
+Freezing layer 'model.6.m.0.m.1.cv1.bn.weight'
+Freezing layer 'model.6.m.0.m.1.cv1.bn.bias'
+Freezing layer 'model.6.m.0.m.1.cv2.conv.weight'
+Freezing layer 'model.6.m.0.m.1.cv2.bn.weight'
+Freezing layer 'model.6.m.0.m.1.cv2.bn.bias'
+Freezing layer 'model.7.conv.weight'
+Freezing layer 'model.7.bn.weight'
+Freezing layer 'model.7.bn.bias'
+Freezing layer 'model.8.cv1.conv.weight'
+Freezing layer 'model.8.cv1.bn.weight'
+Freezing layer 'model.8.cv1.bn.bias'
+Freezing layer 'model.8.cv2.conv.weight'
+Freezing layer 'model.8.cv2.bn.weight'
+Freezing layer 'model.8.cv2.bn.bias'
+Freezing layer 'model.8.m.0.cv1.conv.weight'
+Freezing layer 'model.8.m.0.cv1.bn.weight'
+Freezing layer 'model.8.m.0.cv1.bn.bias'
+Freezing layer 'model.8.m.0.cv2.conv.weight'
+Freezing layer 'model.8.m.0.cv2.bn.weight'
+Freezing layer 'model.8.m.0.cv2.bn.bias'
+Freezing layer 'model.8.m.0.cv3.conv.weight'
+Freezing layer 'model.8.m.0.cv3.bn.weight'
+Freezing layer 'model.8.m.0.cv3.bn.bias'
+Freezing layer 'model.8.m.0.m.0.cv1.conv.weight'
+Freezing layer 'model.8.m.0.m.0.cv1.bn.weight'
+Freezing layer 'model.8.m.0.m.0.cv1.bn.bias'
+Freezing layer 'model.8.m.0.m.0.cv2.conv.weight'
+Freezing layer 'model.8.m.0.m.0.cv2.bn.weight'
+Freezing layer 'model.8.m.0.m.0.cv2.bn.bias'
+Freezing layer 'model.8.m.0.m.1.cv1.conv.weight'
+Freezing layer 'model.8.m.0.m.1.cv1.bn.weight'
+Freezing layer 'model.8.m.0.m.1.cv1.bn.bias'
+Freezing layer 'model.8.m.0.m.1.cv2.conv.weight'
+Freezing layer 'model.8.m.0.m.1.cv2.bn.weight'
+Freezing layer 'model.8.m.0.m.1.cv2.bn.bias'
+Freezing layer 'model.9.cv1.conv.weight'
+Freezing layer 'model.9.cv1.bn.weight'
+Freezing layer 'model.9.cv1.bn.bias'
+Freezing layer 'model.9.cv2.conv.weight'
+Freezing layer 'model.9.cv2.bn.weight'
+Freezing layer 'model.9.cv2.bn.bias'
+Freezing layer 'model.23.dfl.conv.weight'
+[34m[1mAMP: [0mrunning Automatic Mixed Precision (AMP) checks...
+[34m[1mAMP: [0mchecks passed ✅
+WARNING ⚠️ updating to 'imgsz=576'. 'train' and 'val' imgsz must be an integer, while 'predict' and 'export' imgsz may be a [h, w] list or an integer, i.e. 'yolo export imgsz=640,480' or 'yolo export imgsz=640'
+[34m[1mtrain: [0mFast image access ✅ (ping: 0.0±0.0 ms, read: 4885.7±501.1 MB/s, size: 94.9 KB)
+[K[34m[1mtrain: [0mScanning /data/home2/mikjat/projects/cityvision/notebooks/2025-10-09_len_14200/train/labels.cache... 10221 images, 975 backgrounds, 0 corrupt: 100% ━━━━━━━━━━━━ 10221/10221 1.9Git/s 0.0s[K[34m[1mtrain: [0mScanning /data/home2/mikjat/projects/cityvision/notebooks/2025-10-09_len_14200/train/labels.cache... 10221 images, 975 backgrounds, 0 corrupt: 100% ━━━━━━━━━━━━ 10221/10221 109.9Mit/s 0.0s
+[34m[1mval: [0mFast image access ✅ (ping: 0.0±0.0 ms, read: 5388.6±612.3 MB/s, size: 110.7 KB)
+[K[34m[1mval: [0mScanning /data/home2/mikjat/projects/cityvision/notebooks/2025-10-09_len_14200/test/labels.cache... 3979 images, 146 backgrounds, 0 corrupt: 100% ━━━━━━━━━━━━ 3979/3979 758.6Mit/s 0.0s[K[34m[1mval: [0mScanning /data/home2/mikjat/projects/cityvision/notebooks/2025-10-09_len_14200/test/labels.cache... 3979 images, 146 backgrounds, 0 corrupt: 100% ━━━━━━━━━━━━ 3979/3979 53.5Mit/s 0.0s
+Plotting labels to /data/home2/mikjat/projects/cityvision/notebooks/ultralytics_yolo_project_nov_18_yolo11n_loss_classweights/yolov11n_run3/labels.jpg... 
+[34m[1moptimizer:[0m Adam(lr=0.0001, momentum=0.937) with parameter groups 81 weight(decay=0.0), 88 weight(decay=0.002), 87 bias(decay=0.0)
+Image sizes 576 train, 576 val
+Using 0 dataloader workers
+Logging results to [1m/data/home2/mikjat/projects/cityvision/notebooks/ultralytics_yolo_project_nov_18_yolo11n_loss_classweights/yolov11n_run3[0m
+Starting training for 1 epochs...
+
+      Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size
+[DetectionModel] Initializing v8DetectionLoss
+[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.22G       15.5       3261      9.355        396        576: 0% ──────────── 0/80  9.0s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.22G      15.68       3063      9.404        476        576: 1% ──────────── 1/80 9.3s/it 11.8s<12:14[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.22G      15.18       3015      9.027        414        576: 2% ──────────── 2/80 5.3s/it 14.5s<6:53[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.22G      15.34       3072      9.138        424        576: 4% ──────────── 3/80 3.9s/it 16.9s<5:04[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.22G      15.26       3040      9.046        437        576: 5% ╸─────────── 4/80 3.3s/it 19.4s<4:12[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.22G      15.26       3051      9.056        401        576: 6% ╸─────────── 5/80 3.0s/it 21.7s<3:43[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.22G      15.32       3035      9.113        433        576: 8% ╸─────────── 6/80 2.8s/it 24.3s<3:29[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.22G      15.27       3059      9.088        386        576: 9% ━─────────── 7/80 2.7s/it 26.8s<3:20[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.22G      15.39       3098      9.172        396        576: 10% ━─────────── 8/80 2.7s/it 29.4s<3:13[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.22G      15.39       3100      9.163        411        576: 11% ━─────────── 9/80 2.9s/it 32.8s<3:23[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.22G      15.36       3099      9.162        411        576: 12% ━─────────── 10/80 2.9s/it 35.7s<3:21[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.22G      15.32       3069      9.134        457        576: 14% ━╸────────── 11/80 2.7s/it 38.2s<3:09[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.22G      15.29       3051      9.129        428        576: 15% ━╸────────── 12/80 2.7s/it 40.7s<3:01[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.22G      15.27       3039      9.124        429        576: 16% ━╸────────── 13/80 2.7s/it 43.3s<2:58[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      15.24       3030      9.108        407        576: 18% ━━────────── 14/80 2.8s/it 46.4s<3:02[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      15.01       2990      8.974        408        576: 19% ━━────────── 15/80 2.7s/it 48.9s<2:54[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      14.69       2940      8.783        382        576: 20% ━━────────── 16/80 2.6s/it 51.4s<2:48[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      14.33       2892      8.553        357        576: 21% ━━╸───────── 17/80 2.6s/it 53.9s<2:43[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      13.96       2824      8.327        420        576: 22% ━━╸───────── 18/80 2.6s/it 56.4s<2:40[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      13.61       2760      8.112        401        576: 24% ━━╸───────── 19/80 2.6s/it 58.9s<2:36[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      13.31       2700      7.918        429        576: 25% ━━━───────── 20/80 2.7s/it 1:02<2:42[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      13.01       2643      7.732        399        576: 26% ━━━───────── 21/80 2.6s/it 1:04<2:35[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G       12.7       2582      7.543        418        576: 28% ━━━───────── 22/80 2.6s/it 1:07<2:28[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      12.44       2528      7.376        422        576: 29% ━━━───────── 23/80 2.5s/it 1:09<2:25[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      12.21       2475      7.222        450        576: 30% ━━━╸──────── 24/80 2.6s/it 1:12<2:23[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      11.99       2425       7.08        441        576: 31% ━━━╸──────── 25/80 2.6s/it 1:15<2:25[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      11.78       2380      6.945        417        576: 32% ━━━╸──────── 26/80 2.6s/it 1:17<2:21[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      11.59       2338      6.823        416        576: 34% ━━━━──────── 27/80 2.6s/it 1:20<2:17[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      11.43       2299      6.714        419        576: 35% ━━━━──────── 28/80 2.6s/it 1:22<2:13[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      11.26       2258      6.606        442        576: 36% ━━━━──────── 29/80 2.7s/it 1:25<2:15[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      11.11       2222      6.508        415        576: 38% ━━━━──────── 30/80 2.6s/it 1:28<2:12[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      10.95       2183      6.409        422        576: 39% ━━━━╸─────── 31/80 2.6s/it 1:30<2:07[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      10.81       2145      6.316        449        576: 40% ━━━━╸─────── 32/80 2.6s/it 1:33<2:03[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      10.67       2109      6.229        444        576: 41% ━━━━╸─────── 33/80 2.5s/it 1:35<1:58[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      10.53       2075      6.143        424        576: 42% ━━━━━─────── 34/80 2.5s/it 1:38<1:54[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G       10.4       2042      6.063        414        576: 44% ━━━━━─────── 35/80 2.5s/it 1:40<1:51[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      10.28       2011      5.985        407        576: 45% ━━━━━─────── 36/80 2.5s/it 1:43<1:49[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      10.16       1981      5.913        402        576: 46% ━━━━━╸────── 37/80 2.7s/it 1:46<1:54[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      10.05       1951      5.846        421        576: 48% ━━━━━╸────── 38/80 2.7s/it 1:49<1:52[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      9.947       1922      5.781        459        576: 49% ━━━━━╸────── 39/80 2.6s/it 1:51<1:46[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G       9.84       1894      5.718        431        576: 50% ━━━━━━────── 40/80 2.5s/it 1:53<1:42[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G       9.74       1866      5.658        426        576: 51% ━━━━━━────── 41/80 2.6s/it 1:56<1:41[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      9.643       1839        5.6        450        576: 52% ━━━━━━────── 42/80 2.5s/it 1:59<1:36[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      9.552       1813      5.546        429        576: 54% ━━━━━━────── 43/80 2.5s/it 2:01<1:34[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      9.464       1789      5.492        419        576: 55% ━━━━━━╸───── 44/80 2.5s/it 2:04<1:30[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G       9.38       1766      5.441        420        576: 56% ━━━━━━╸───── 45/80 2.5s/it 2:06<1:28[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      9.299       1744       5.39        423        576: 57% ━━━━━━╸───── 46/80 2.6s/it 2:09<1:28[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      9.218       1723      5.341        395        576: 59% ━━━━━━━───── 47/80 2.6s/it 2:11<1:25[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G       9.14       1702      5.296        414        576: 60% ━━━━━━━───── 48/80 2.5s/it 2:14<1:22[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      9.068       1681      5.253        415        576: 61% ━━━━━━━───── 49/80 2.5s/it 2:16<1:18[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G          9       1662      5.212        406        576: 62% ━━━━━━━───── 50/80 2.5s/it 2:19<1:16[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.934       1643      5.172        435        576: 64% ━━━━━━━╸──── 51/80 2.6s/it 2:21<1:14[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.866       1625      5.133        401        576: 65% ━━━━━━━╸──── 52/80 2.5s/it 2:24<1:11[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.799       1607      5.094        403        576: 66% ━━━━━━━╸──── 53/80 2.6s/it 2:27<1:11[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.742       1590      5.062        412        576: 68% ━━━━━━━━──── 54/80 2.6s/it 2:29<1:07[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.683       1573      5.028        423        576: 69% ━━━━━━━━──── 55/80 2.6s/it 2:32<1:04[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.626       1557      4.995        404        576: 70% ━━━━━━━━──── 56/80 2.5s/it 2:34<1:00[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.571       1540      4.963        450        576: 71% ━━━━━━━━╸─── 57/80 2.5s/it 2:37<57.8s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.521       1524      4.934        464        576: 72% ━━━━━━━━╸─── 58/80 2.6s/it 2:40<56.9s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G       8.47       1510      4.906        391        576: 74% ━━━━━━━━╸─── 59/80 2.6s/it 2:42<55.4s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.417       1496      4.876        440        576: 75% ━━━━━━━━━─── 60/80 2.7s/it 2:45<54.7s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.371       1481       4.85        449        576: 76% ━━━━━━━━━─── 61/80 2.7s/it 2:48<52.1s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.322       1468      4.821        445        576: 78% ━━━━━━━━━─── 62/80 2.7s/it 2:51<47.7s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.272       1454      4.795        410        576: 79% ━━━━━━━━━─── 63/80 2.7s/it 2:53<46.2s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.226       1441       4.77        443        576: 80% ━━━━━━━━━╸── 64/80 2.8s/it 2:56<44.9s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.176       1429      4.743        410        576: 81% ━━━━━━━━━╸── 65/80 2.7s/it 2:59<40.4s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.132       1417      4.718        445        576: 82% ━━━━━━━━━╸── 66/80 2.8s/it 3:02<39.9s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.089       1405      4.695        449        576: 84% ━━━━━━━━━━── 67/80 2.9s/it 3:05<37.3s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.053       1394      4.674        461        576: 85% ━━━━━━━━━━── 68/80 3.0s/it 3:08<35.6s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      8.012       1383      4.652        436        576: 86% ━━━━━━━━━━── 69/80 2.8s/it 3:11<31.1s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      7.974       1371       4.63        460        576: 88% ━━━━━━━━━━── 70/80 2.9s/it 3:14<28.7s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      7.933       1361      4.607        444        576: 89% ━━━━━━━━━━╸─ 71/80 2.8s/it 3:16<25.0s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      7.895       1351      4.586        440        576: 90% ━━━━━━━━━━╸─ 72/80 2.7s/it 3:19<21.7s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      7.858       1341      4.566        421        576: 91% ━━━━━━━━━━╸─ 73/80 2.7s/it 3:22<18.9s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      7.823       1332      4.546        414        576: 92% ━━━━━━━━━━━─ 74/80 2.6s/it 3:24<15.8s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      7.787       1323      4.525        426        576: 94% ━━━━━━━━━━━─ 75/80 2.7s/it 3:27<13.5s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      7.751       1314      4.505        417        576: 95% ━━━━━━━━━━━─ 76/80 2.7s/it 3:30<10.7s[cls loss] class weights expanded torch.Size([1, 1, 9])
+[cls loss] cls loss per element torch.Size([128, 6804, 9])
+[K        1/1      7.24G      7.721       1305      4.488        447        576: 96% ━━━━━━━━━━━╸ 77/80 2.8s/it 3:33<8.3s[K        1/1      7.24G      7.721       1305      4.488        447        576: 98% ━━━━━━━━━━━╸ 78/80 2.6s/it 3:35<5.3s

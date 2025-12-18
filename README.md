@@ -27,6 +27,16 @@ CityVision is a tool that allows the use of traffic videos to extract informatio
 *   `.gitignore`: Specifies intentionally untracked files that Git should ignore.
 *   `LICENSE`: Contains the GNU Affero General Public License v3.0 under which the project is released.
 
+## Google Cloud Resources
+
+To get started with CityVision, you'll need access to pre-trained models and optionally, datasets. These are hosted on Google Cloud Storage.
+
+* **Models:**
+    * **Custom Trained Model:** `https://console.cloud.google.com/storage/browser/open-cityvision/`
+      
+* **Sample Datasets:**
+    * **Custom Traffic Dataset:** `https://console.cloud.google.com/storage/browser/open-cityvision/dataset`
+      
 ## Installation
 
 1.  **Clone the repository:**

@@ -1,0 +1,289 @@
+import pytest
+import os
+import yaml
+import tempfile
+import shutil
+from unittest.mock import Mock, patch, MagicMock, mock_open
+from unittest.mock import call
+import zipfile
+import sys
+from pathlib import Path
+
+# Add the parent directory to the path to import train module
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from notebooks.training import (
+    train_yolo_model,
+    GCS_BUCKET_NAME,
+    GCS_DATA_PATH,
+    IMG_SIZE,
+    DEVICE,
+)
+
+from notebooks.utils import (
+    download_data_from_gcs,
+    unzipDataset,
+)
+
+
+class TestDownloadDataFromGCS:
+    """Test cases for download_data_from_gcs function."""
+
+    @patch("notebooks.utils.storage.Client")
+    def test_download_data_from_gcs_success(self, mock_storage_client):
+        """Test successful download of data from GCS."""
+        # Mock setup
+        mock_client = Mock()
+        mock_bucket = Mock()
+        mock_blob1 = Mock()
+        mock_blob1.name = "Dataset/file1.zip"
+        mock_blob1.endswith.return_value = True
+
+        mock_blob2 = Mock()
+        mock_blob2.name = "Dataset/file2.zip"
+        mock_blob2.endswith.return_value = True
+
+        mock_blob3 = Mock()
+        mock_blob3.name = "Dataset/directory/"
+        mock_blob3.endswith.return_value = False
+
+        mock_bucket.list_blobs.return_value = [mock_blob1, mock_blob2, mock_blob3]
+        mock_client.bucket.return_value = mock_bucket
+        mock_storage_client.return_value = mock_client
+
+        # Test
+        with patch("os.makedirs"):
+            download_data_from_gcs("test-bucket", "Dataset/", "local_dir")
+
+        # Assertions
+        mock_storage_client.assert_called_once()
+        mock_client.bucket.assert_called_once_with("test-bucket")
+        mock_bucket.list_blobs.assert_called_once_with(prefix="Dataset/", delimiter="/")
+        assert mock_blob1.download_to_filename.call_count == 1
+        assert mock_blob2.download_to_filename.call_count == 1
+        assert mock_blob3.download_to_filename.call_count == 0
+
+    @patch("notebooks.utils.storage.Client")
+    def test_download_data_from_gcs_no_zip_files(self, mock_storage_client):
+        """Test when no zip files are found in GCS."""
+        # Mock setup
+        mock_client = Mock()
+        mock_bucket = Mock()
+        mock_blob = Mock()
+        mock_blob.name = "Dataset/file.txt"
+        mock_blob.endswith.return_value = False
+
+        mock_bucket.list_blobs.return_value = [mock_blob]
+        mock_client.bucket.return_value = mock_bucket
+        mock_storage_client.return_value = mock_client
+
+        # Test
+        with patch("os.makedirs"):
+            with patch("builtins.print") as mock_print:
+                download_data_from_gcs("test-bucket", "Dataset/", "local_dir")
+
+        # Assertions
+        expected_message = "No zipped files found or downloaded from gs://test-bucket/Dataset/. Please check bucket name and GCS path, and ensure there are .zip files present."
+        mock_print.assert_any_call(expected_message)
+
+    @patch("notebooks.utils.storage.Client")
+    def test_download_data_from_gcs_exception(self, mock_storage_client):
+        """Test handling of exceptions during download."""
+        # Mock setup
+        mock_storage_client.side_effect = Exception("GCS connection failed")
+
+        # Test
+        with patch("builtins.print") as mock_print:
+            with pytest.raises(SystemExit):
+                download_data_from_gcs("test-bucket", "Dataset/", "local_dir")
+
+        # Assertions
+        mock_print.assert_any_call("An error occurred: GCS connection failed")
+
+
+class TestUnzipDataset:
+    """Test cases for unzipDataset function."""
+
+    def test_unzipDataset_success(self):
+        """Test successful unzipping of dataset files."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create a test zip file
+            test_file_path = os.path.join(temp_dir, "test.zip")
+            with zipfile.ZipFile(test_file_path, "w") as zipf:
+                zipf.writestr("test.txt", "test content")
+
+            # Create a non-zip file
+            non_zip_file = os.path.join(temp_dir, "test.txt")
+            with open(non_zip_file, "w") as f:
+                f.write("test")
+
+            # Test
+            unzipDataset(temp_dir)
+
+            # Assertions
+            assert not os.path.exists(test_file_path)  # Zip file should be removed
+            assert os.path.exists(
+                os.path.join(temp_dir, "test.txt")
+            )  # Content should be extracted
+            assert os.path.exists(non_zip_file)  # Non-zip file should remain
+
+    def test_unzipDataset_empty_directory(self):
+        """Test unzipping from an empty directory."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Should not raise any exception
+            unzipDataset(temp_dir)
+
+
+class TestTrainYoloModel:
+    """Test cases for train_yolo_model function."""
+
+    @patch("notebooks.training.analyze_yolo_dataset")
+    @patch("google.cloud.storage.Client")
+    @patch("os.walk")
+    @patch("notebooks.training.YOLO")
+    def test_train_yolo_model_success(
+        self, mock_yolo_class, mock_os_walk, mock_storage_client, mock_analyze
+    ):
+        """Test successful YOLO model training and GCS upload mocking."""
+
+        # Mock setup
+        mock_model = Mock()
+        mock_model.trainer = Mock()
+        mock_model.trainer.save_dir = "/mocked/save/dir"
+        mock_yolo_class.return_value = mock_model
+        mock_model.train.return_value = Mock()
+
+        mock_analyze.return_value = ({0: 10, 1: 20}, ["class0", "class1"])
+
+        # Mock os.walk
+        files_to_walk = ["weights.pt", "log.txt"]
+        mock_os_walk.return_value = [
+            ("/mocked/save/dir", [], files_to_walk),
+        ]
+
+        # Mock the GCS client chain
+        mock_client = Mock()
+        mock_bucket = Mock()
+        mock_blob = Mock()
+        mock_bucket.blob.return_value = mock_blob
+        mock_client.bucket.return_value = mock_bucket
+        mock_storage_client.return_value = mock_client
+
+        # Test
+        train_yolo_model(
+            data_yaml_path="test_data.yaml",
+            model=mock_model,
+            epochs=5,
+            img_size=640,
+            batch_size=16,
+            device="cpu",
+        )
+
+        # Assertions
+        mock_model.train.assert_called_once()
+        assert mock_storage_client.call_count == 2
+
+        # Assertions for GCS upload calls
+        assert mock_blob.upload_from_filename.call_count == len(files_to_walk)
+
+    @patch("notebooks.training.analyze_yolo_dataset")
+    @patch("google.cloud.storage.Client")
+    @patch("os.walk")
+    @patch("notebooks.training.YOLO")
+    def test_train_yolo_model_with_custom_hsv(
+        self, mock_yolo_class, mock_os_walk, mock_storage_client, mock_analyze
+    ):
+        """Test YOLO model training with custom HSV parameters and GCS upload mocking."""
+        # Mock setup
+        mock_model = MagicMock()
+
+        mock_overrides = {}
+        mock_model.overrides = mock_overrides  # Assign the dictionary directly
+
+        mock_model.trainer = Mock()
+        mock_model.trainer.save_dir = "/mocked/save/dir"
+        mock_yolo_class.return_value = mock_model
+        mock_model.train.return_value = Mock()
+
+        mock_analyze.return_value = ({0: 10, 1: 20}, ["class0", "class1"])
+
+        # Mock os.walk
+        files_to_walk = ["weights.pt", "log.txt"]
+        mock_os_walk.return_value = [
+            ("/mocked/save/dir", [], files_to_walk),
+        ]
+
+        # Mock the GCS client chain
+        mock_client = Mock()
+        mock_bucket = Mock()
+        mock_blob = Mock()
+        mock_bucket.blob.return_value = mock_blob
+        mock_client.bucket.return_value = mock_bucket
+        mock_storage_client.return_value = mock_client
+
+        custom_augmentations = {
+            "hsv_h": 0.1,
+            "hsv_s": 0.6,
+            "hsv_v": 0.4,
+        }
+
+        # Test
+        train_yolo_model(
+            data_yaml_path="test_data.yaml",
+            model=mock_model,
+            epochs=5,
+            img_size=640,
+            batch_size=16,
+            device="cpu",
+            augmentations=custom_augmentations,
+        )
+
+        # Assertions
+        mock_model.train.assert_called_once()
+        assert mock_storage_client.call_count == 2
+        assert mock_blob.upload_from_filename.call_count == len(files_to_walk)
+
+        # Check that the model.overrides dictionary received the augmentations
+        assert mock_model.overrides["hsv_h"] == 0.1
+        assert mock_model.overrides["hsv_s"] == 0.6
+        assert mock_model.overrides["hsv_v"] == 0.4
+
+    @patch("notebooks.training.analyze_yolo_dataset")
+    @patch("notebooks.training.YOLO")
+    def test_train_yolo_model_exception(self, mock_yolo_class, mock_analyze):
+        """Test handling of exceptions during training."""
+        # Mock setup
+        mock_model = Mock()
+        mock_yolo_class.return_value = mock_model
+        mock_model.train.side_effect = Exception("Training failed")
+        # Mock analyze_yolo_dataset
+        mock_analyze.return_value = ({0: 10, 1: 20}, ["class0", "class1"])
+        # Test
+        with patch("builtins.print") as mock_print:
+            with pytest.raises(SystemExit):
+                train_yolo_model(
+                    data_yaml_path="test_data.yaml",
+                    model=mock_model,
+                    epochs=5,
+                    img_size=640,
+                    batch_size=16,
+                    device="cpu",
+                )
+
+        # Assertions
+        mock_print.assert_any_call("Error during YOLO model training: Training failed")
+
+
+class TestConstants:
+    """Test cases for module constants."""
+
+    def test_constants_are_defined(self):
+        """Test that all expected constants are defined."""
+        assert GCS_BUCKET_NAME == "open-cityvision"
+        assert GCS_DATA_PATH == "."
+        assert IMG_SIZE != None
+        assert DEVICE == 0
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])
